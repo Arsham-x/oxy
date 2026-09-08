@@ -348,6 +348,20 @@ def ask_permission(tool_name: str, summary: str, theme: dict[str, Any]) -> str:
     return "no"
 
 
+def ask_yes_no(prompt_text: str, theme: dict[str, Any], default_yes: bool = True) -> bool:
+    """Ask a simple yes/no question. Returns True for yes, False for no."""
+    hint = "Y/n" if default_yes else "y/N"
+    console.print(f"  [{theme.get('accent', 'cyan')}]?[/] {prompt_text} [{theme.get('dim', 'dim')}]({hint})[/]")
+    try:
+        choice = console.input("  ❯ ").strip().lower()
+    except (KeyboardInterrupt, EOFError):
+        console.print()
+        return default_yes
+    if not choice:
+        return default_yes
+    return choice in ("y", "yes", "بله", "آره")
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  Thinking / reasoning display (Grok Build ◆ style)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

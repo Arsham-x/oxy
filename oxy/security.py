@@ -75,6 +75,26 @@ STEERING_FILES = {
     ".env.production",
 }
 
+# Precompile regexes for steering file modifications via shell redirection
+STEERING_REDIRECT_PATTERNS = [
+    (s_file, re.compile(rf'(?:>|>>|\btee\b|\bsed\s+-i).*?\b{re.escape(s_file)}\b', re.IGNORECASE))
+    for s_file in STEERING_FILES
+]
+
+# Known built-in tools subject to security policies
+KNOWN_TOOLS = {
+    "read_file",
+    "write_file",
+    "edit_file",
+    "bash",
+    "file_search",
+    "content_search",
+    "git_status",
+    "save_memory",
+    "recall_memory",
+    "load_skill",
+}
+
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  Security Gate
@@ -106,8 +126,7 @@ class SecurityGate:
                     )
 
         # 3. Modification of steering files via shell redirection
-        for s_file in STEERING_FILES:
-            pattern = re.compile(rf'(?:>|>>|\btee\b|\bsed\s+-i).*?\b{re.escape(s_file)}\b', re.IGNORECASE)
+        for s_file, pattern in STEERING_REDIRECT_PATTERNS:
             if pattern.search(stripped):
                 return SecurityDecision(
                     SecurityVerdict.REQUIRES_CONFIRMATION,
@@ -154,7 +173,10 @@ class SecurityGate:
 
     @classmethod
     def evaluate_tool_call(cls, tool_name: str, tool_args: dict) -> SecurityDecision:
-        """Evaluate a tool execution call before dispatching."""
+        """Evaluate a tool execution call before dispatching.
+
+        DENY-BY-DEFAULT: Unknown tools are BLOCKED, not allowed.
+        """
         if tool_name == "bash":
             cmd = tool_args.get("command", "")
             return cls.check_bash_command(cmd)
@@ -167,4 +189,12 @@ class SecurityGate:
             path = tool_args.get("path", "")
             return cls.check_file_path(path, operation="read")
 
-        return SecurityDecision(SecurityVerdict.ALLOWED, "Tool action allowed")
+        # Known safe tools that require no further checks
+        elif tool_name in ("file_search", "content_search", "git_status", "save_memory", "recall_memory", "load_skill"):
+            return SecurityDecision(SecurityVerdict.ALLOWED, "Tool action allowed")
+
+        # Deny-by-default: Unknown tools must be explicitly approved
+        return SecurityDecision(
+            SecurityVerdict.BLOCKED,
+            f"Unknown tool '{tool_name}' blocked by security floor. Add explicit policy branch in SecurityGate.evaluate_tool_call."
+        )

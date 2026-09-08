@@ -14,7 +14,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich import box
 
-from .config import SYSTEM_PROMPT_FILE, save_config, resolve_system_prompt
+from .config import save_config, resolve_system_prompt
 from .render import (
     console, render_info, render_error, render_system_prompt,
     render_token_table, render_error_panel, get_theme, THEMES,
@@ -318,13 +318,26 @@ def cmd_clear(engine: ChatEngine, theme: dict):
 
 
 def cmd_system(engine: ChatEngine, arg: str, theme: dict):
+    from .config import DEFAULT_CONFIG
     if not arg:
         render_system_prompt(engine.system_prompt or "<default>", theme)
     elif arg == "edit":
-        path = Path(SYSTEM_PROMPT_FILE)
+        # Edit the explicit system_prompt_file if set, else create a fresh
+        # local file and point config at it — NEVER write bare SYSTEM_PROMPT_FILE,
+        # which must stay opt-in (see resolve_system_prompt).
+        cfg_file = engine.config.get("system_prompt_file", "")
+        if cfg_file:
+            path = Path(cfg_file).expanduser()
+        else:
+            path = Path("oxy_system_prompt.md")
+            engine.config["system_prompt_file"] = str(path)
         if not path.exists():
-            path.write_text(engine.system_prompt or "You are OXY.", encoding="utf-8")
+            path.write_text(engine.system_prompt or DEFAULT_CONFIG["system_prompt"], encoding="utf-8")
         editor = os.environ.get("EDITOR", "nano")
+        editor_bin = editor.split()[0]
+        if editor_bin not in ("nano", "vi", "vim", "nvim", "emacs", "code", "micro"):
+            render_error(f"refusing to launch unrecognized EDITOR: {editor_bin!r}", theme)
+            return
         os.system(f'{editor} "{path}"')
         text = path.read_text(encoding="utf-8").strip()
         if text:

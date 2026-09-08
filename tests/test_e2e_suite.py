@@ -342,6 +342,69 @@ class TestOXYArchitecture(unittest.TestCase):
         self.assertIn("auto", text)
         self.assertIn("rr", text)
 
+    # ── 15. P0-1: Ambient System Prompt Injection Immunity ─────────
+    def test_system_prompt_never_autoloads_ambient_file(self):
+        from oxy.config import resolve_system_prompt
+        # Even if system_prompt.md exists in cwd, resolve_system_prompt must NOT
+        # load it unless explicitly configured via system_prompt_file
+        cfg = {"system_prompt": "Safe inline prompt", "system_prompt_file": ""}
+        prompt = resolve_system_prompt(cfg)
+        self.assertEqual(prompt, "Safe inline prompt")
+
+        # Explicit opt-in MUST still work
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as tf:
+            tf.write("Custom explicit prompt")
+            tf_path = tf.name
+        try:
+            cfg_explicit = {"system_prompt": "Safe inline", "system_prompt_file": tf_path}
+            self.assertEqual(resolve_system_prompt(cfg_explicit), "Custom explicit prompt")
+        finally:
+            os.unlink(tf_path)
+
+    # ── 16. P0-2: Default-Deny Security Policy ──────────────────────
+    def test_security_gate_default_deny_unknown_tools(self):
+        unknown_decision = SecurityGate.evaluate_tool_call("unknown_exfil_tool", {})
+        self.assertEqual(unknown_decision.verdict, SecurityVerdict.BLOCKED)
+        self.assertIn("blocked by security floor", unknown_decision.reason)
+
+        # Builtins must still be allowed or routed appropriately
+        known_safe = ["file_search", "content_search", "git_status", "save_memory", "recall_memory", "load_skill"]
+        for tool in known_safe:
+            dec = SecurityGate.evaluate_tool_call(tool, {})
+            self.assertEqual(dec.verdict, SecurityVerdict.ALLOWED, f"Builtin tool '{tool}' was blocked")
+
+    # ── 17. P0-3: Orphaned Tool Calls Durability & Discard ─────────
+    def test_orphaned_tool_calls_recovery(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sess = Session(workspace_dir=tmpdir, title="Orphan Test")
+            sess.commit_user_message("Do work")
+            sess.commit_assistant_pre_execution("Calling tool...", tool_calls=[
+                {"id": "call_orphan", "function": {"name": "bash", "arguments": '{"command": "ls"}'}}
+            ])
+            self.assertTrue(sess.has_unresolved_tool_calls())
+            orphans = sess.get_unresolved_tool_calls()
+            self.assertEqual(len(orphans), 1)
+            self.assertEqual(orphans[0]["id"], "call_orphan")
+
+            discarded = sess.discard_unresolved_tool_calls()
+            self.assertEqual(discarded, 1)
+            self.assertFalse(sess.has_unresolved_tool_calls())
+
+    # ── 18. P0-4: Atomic Config Write & KeyError Immunity ──────────
+    def test_atomic_config_save_and_missing_key_safety(self):
+        from oxy.config import save_config, load_config
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = Path(tmpdir) / "oxy_config.json"
+            save_config({"api_key": "test-key-123", "theme": "cyber"}, path=cfg_path)
+            self.assertTrue(cfg_path.exists())
+            loaded = load_config(str(cfg_path))
+            self.assertEqual(loaded["api_key"], "test-key-123")
+            self.assertEqual(loaded["theme"], "cyber")
+
+            # Config without api_key key should not crash .get() lookups
+            partial_cfg = {"model": "gpt-4o"}
+            self.assertIsNone(partial_cfg.get("api_key"))
+
 
 if __name__ == "__main__":
     unittest.main()

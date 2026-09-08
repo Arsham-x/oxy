@@ -23,7 +23,7 @@ from rich.table import Table
 from rich.text import Text
 from rich import box
 
-from .config import DEFAULT_CONFIG, CONFIG_FILE, SYSTEM_PROMPT_FILE, save_config
+from .config import DEFAULT_CONFIG, CONFIG_FILE, save_config
 from .render import get_theme, _mask_key
 from .ui import select_menu, render_stepper, render_cockpit_header, p
 

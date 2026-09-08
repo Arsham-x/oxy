@@ -237,6 +237,17 @@ class Session:
         """Check if any tool calls were dispatched without receiving results."""
         return len(self.pending_tool_calls) > 0
 
+    def get_unresolved_tool_calls(self) -> list[dict[str, Any]]:
+        """Return list of pending tool calls from crashed/interrupted turns."""
+        return list(self.pending_tool_calls.values())
+
+    def discard_unresolved_tool_calls(self) -> int:
+        """Clear pending tool calls (e.g., after user declines recovery).
+        Returns the number of discarded calls."""
+        count = len(self.pending_tool_calls)
+        self.pending_tool_calls.clear()
+        return count
+
     def get_context_messages(self, max_turns: int = 20) -> list[dict[str, Any]]:
         """Get sliding window of conversation messages for inference."""
         if not self.messages:

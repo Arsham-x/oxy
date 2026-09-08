@@ -93,10 +93,23 @@ def load_config(path: str | None = None) -> dict[str, Any]:
 
 
 def save_config(config: dict[str, Any], path: Path | None = None):
-    """Write config to JSON file."""
+    """Atomically write config to JSON file using tmp file + fsync + replace."""
     file_path = path or Path(CONFIG_FILE)
-    with open(file_path, "w") as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = file_path.with_suffix(f".tmp.{os.getpid()}")
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        tmp_path.replace(file_path)
+    except Exception:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+        raise
 
 
 # ── System Prompt ─────────────────────────────────────────────────
@@ -105,9 +118,14 @@ def resolve_system_prompt(config: dict[str, Any]) -> str:
     """Load system prompt from file or inline config.
 
     Priority:
-      1. system_prompt_file in config → read that file
-      2. system_prompt.md next to config → read it
-      3. system_prompt string in config
+      1. system_prompt_file in config → read that file (explicit opt-in only)
+      2. system_prompt string in config (default)
+
+    NOTE: This function deliberately NEVER auto-loads an adjacent
+    ``system_prompt.md`` file. Implicit ambient file loading is a classic
+    prompt-injection vector: merely launching OXY from a directory containing
+    such a file would silently activate attacker-controlled instructions.
+    Users must point ``system_prompt_file`` at the file explicitly.
     """
     # Explicit file path
     prompt_file = config.get("system_prompt_file", "")
@@ -117,13 +135,6 @@ def resolve_system_prompt(config: dict[str, Any]) -> str:
             text = p.read_text(encoding="utf-8").strip()
             if text:
                 return text
-
-    # Default file next to script
-    default = Path(SYSTEM_PROMPT_FILE)
-    if default.exists():
-        text = default.read_text(encoding="utf-8").strip()
-        if text:
-            return text
 
     # Inline string
     return config.get("system_prompt", "")

@@ -61,7 +61,7 @@ def main():
     warnings = validate_config(config)
 
     # If no API key and no round-robin keys, show setup help and exit
-    if not config["api_key"] and not config.get("round_robin_keys"):
+    if not config.get("api_key") and not config.get("round_robin_keys"):
         from rich.panel import Panel
         from rich import box
 
@@ -109,14 +109,34 @@ def main():
 
         if resumed_sess:
             engine.session = resumed_sess
-            engine.history = [m for m in resumed_sess.messages if m.get("role") in ("user", "assistant", "tool")]
+            # Preserve ALL replayed message types (including system compaction blocks)
+            engine.history = [m for m in resumed_sess.messages if m.get("role") in ("user", "assistant", "tool", "system")]
             render_info(f"Resumed session '{resumed_sess.session_id}' ({len(engine.history)} turns)", theme)
         else:
             render_info("No existing session found to resume. Starting fresh session.", theme)
 
+    # ── Crash Recovery: surface orphaned tool calls ────────────────
+    if engine.session.has_unresolved_tool_calls():
+        from .render import render_error, ask_yes_no
+        orphaned = engine.session.get_unresolved_tool_calls()
+        render_error(
+            f"Previous session ended with {len(orphaned)} unresolved tool call(s) "
+            "(crashed or interrupted mid-execution).",
+            theme,
+        )
+        for tc in orphaned:
+            fn = tc.get("function", {})
+            console.print(f"  [dim]• {fn.get('name')}: {str(fn.get('arguments'))[:80]}[/]")
+        ask_yes_no("Continue without those calls? (no keeps the warning for this session)", theme, default_yes=True)
+        discarded = engine.session.discard_unresolved_tool_calls()
+        render_info(f"Discarded {discarded} orphaned tool call(s). State is clean.", theme)
+
     # ── Headless Prompt Mode (-p / --prompt) ───────────────────
     if args.prompt:
-        engine.send(args.prompt)
+        try:
+            engine.send(args.prompt)
+        except Exception as e:
+            render_error_panel(f"Agent failed: {type(e).__name__}: {e}", theme)
         return
 
     # ── Welcome ────────────────────────────────────────────────
@@ -162,9 +182,13 @@ def main():
         if not user_input:
             continue
 
-        # ── Slash commands ─────────────────────────────────────
+        # ── Slash commands (exception boundary: never kill REPL) ──
         if user_input.startswith("/"):
-            keep_running, new_theme = handle_command(engine, user_input, config, theme)
+            try:
+                keep_running, new_theme = handle_command(engine, user_input, config, theme)
+            except Exception as e:
+                render_error_panel(f"Command failed: {type(e).__name__}: {e}", theme)
+                continue
             if new_theme:
                 theme = new_theme
                 session = make_prompt_session(theme)
@@ -179,6 +203,14 @@ def main():
         signal.signal(signal.SIGINT, on_sigint)
 
         try:
-            engine.send(user_input)
+            try:
+                engine.send(user_input)
+            except SystemExit:
+                raise
+            except Exception as e:
+                # Exception boundary: errors render a panel, history is
+                # preserved, and the loop continues. Only quit kills the REPL.
+                render_error_panel(f"Agent error ({type(e).__name__}): {e}", theme)
+                render_info(f"history preserved ({len(engine.history)} messages). keep going.", theme)
         finally:
             signal.signal(signal.SIGINT, old_handler)
