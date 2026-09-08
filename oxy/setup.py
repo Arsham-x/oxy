@@ -265,11 +265,8 @@ PERMISSION_OPTIONS = [
 
 def _ask_input(prompt_text: str, default: str = "", password: bool = False, theme: dict = None) -> str:
     """Prompt user for clean single-line text input."""
-    import termios
-    try:
-        termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
-    except Exception:
-        pass
+    from .compat import flush_input
+    flush_input()
 
     accent = theme.get("accent", "cyan") if theme else "cyan"
     display_def = "****" if password and default else default

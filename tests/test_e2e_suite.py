@@ -535,6 +535,178 @@ class TestOXYArchitecture(unittest.TestCase):
         self.assertTrue(resp.was_streamed)
         self.assertTrue(resp.thought_rendered)
 
+    # ── 25. P2-1: KeyManager Cooldown and Lock Safety ──────────────
+    def test_key_manager_cooldown_and_lock(self):
+        from oxy.keys import KeyManager, Strategy
+        import threading
+
+        km = KeyManager(["key1", "key2", "key3"], strategy=Strategy.SEQUENTIAL)
+        self.assertEqual(km.count, 3)
+        self.assertTrue(km.is_active)
+
+        # Mark key1 in cooldown
+        km.mark_cooldown("key1", cooldown_seconds=10.0)
+        self.assertTrue(km.is_cooling_down("key1"))
+        self.assertFalse(km.is_cooling_down("key2"))
+
+        available = km.get_available_keys()
+        self.assertNotIn("key1", available)
+        self.assertIn("key2", available)
+        self.assertIn("key3", available)
+
+        # Next key should skip key1
+        k = km.next_key()
+        self.assertIn(k, ("key2", "key3"))
+
+        # Concurrent rotation stress test
+        def worker():
+            for _ in range(50):
+                _ = km.next_key()
+
+        threads = [threading.Thread(target=worker) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        stats = km.stats()
+        total_uses = sum(s["uses"] for s in stats)
+        self.assertEqual(total_uses, 1 + 50 * 4)
+
+    # ── 26. P2-2: Append-Only Ledger Rewind and Undo ────────────────
+    def test_append_only_rewind_and_undo(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sess = Session(workspace_dir=tmpdir, title="Rewind Test")
+            sess.commit_user_message("Message 1")
+            sess.commit_assistant_pre_execution("Response 1")
+            sess.commit_user_message("Message 2")
+            sess.commit_assistant_pre_execution("Response 2")
+
+            self.assertEqual(len(sess.messages), 4)
+
+            # Undo last turn (removes Response 2 and Message 2)
+            undo_res = sess.undo_last_turn()
+            self.assertEqual(undo_res["removed"], 2)
+            self.assertEqual(len(sess.messages), 2)
+            self.assertEqual(sess.messages[-1]["content"], "Response 1")
+
+            # Verify ledger on disk still contains all entries + rewind marker
+            with open(sess.ledger_file, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            self.assertGreaterEqual(len(lines), 5)  # init + 4 messages + 1 rewind marker
+
+            # Replaying ledger must restore the rewound state (2 messages)
+            replayed = Session(session_id=sess.session_id, workspace_dir=tmpdir)
+            self.assertEqual(len(replayed.messages), 2)
+
+    # ── 27. P2-3: Project Memory Overlay ───────────────────────────
+    def test_project_memory_overlay(self):
+        from oxy.memory import (
+            set_project_memory_root, save_memory, recall_memory,
+            get_memory_index_text
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            set_project_memory_root(tmpdir)
+            try:
+                # Save to project overlay
+                res = save_memory(
+                    slug="local_rule",
+                    title="Local Architecture Rule",
+                    category="project",
+                    content="Always use uv instead of poetry.",
+                    description="Workspace package manager guideline",
+                    scope="project",
+                )
+                self.assertIn("Saved memory", res)
+
+                # Recall should find it and indicate project scope
+                hits = recall_memory("package manager")
+                self.assertTrue(len(hits) >= 1)
+                self.assertEqual(hits[0]["slug"], "local_rule")
+                self.assertEqual(hits[0]["scope"], "project")
+
+                # Project overlay must appear in memory index text
+                idx_text = get_memory_index_text()
+                self.assertIn("Project Memory (local overlay)", idx_text)
+                self.assertIn("Local Architecture Rule", idx_text)
+            finally:
+                set_project_memory_root(None)
+
+    # ── 28. P2-4: Background Job Execution Engine ──────────────────
+    def test_background_jobs_manager(self):
+        from oxy.jobs import JobManager
+        import time
+
+        jm = JobManager(max_jobs=4)
+        job = jm.submit("echo 'background execution complete'")
+        self.assertIsNotNone(job.job_id)
+
+        # Wait briefly for execution
+        time.sleep(0.3)
+        st = jm.status(job.job_id)
+        self.assertTrue(st["found"])
+        self.assertEqual(st["status"], "completed")
+        self.assertEqual(st["returncode"], 0)
+        self.assertIn("background execution complete", st["output_tail"])
+
+        # Test listing
+        job_list = jm.list_jobs()
+        self.assertEqual(len(job_list), 1)
+        self.assertEqual(job_list[0]["job_id"], job.job_id)
+
+    # ── 29. P2-5: Deterministic Lifecycle Hooks ────────────────────
+    def test_lifecycle_hooks_dispatch(self):
+        from oxy.hooks import HookRegistry, HookEvent
+
+        reg = HookRegistry()
+        events_fired = []
+
+        def on_pre_turn(**payload):
+            events_fired.append(("pre_turn", payload.get("input")))
+
+        def on_pre_tool_call(**payload):
+            # Block a dangerous mock tool
+            if payload.get("tool_name") == "blocked_tool":
+                return False
+
+        reg.register(HookEvent.PRE_TURN, on_pre_turn)
+        reg.register(HookEvent.PRE_TOOL_CALL, on_pre_tool_call)
+
+        res_turn = reg.dispatch(HookEvent.PRE_TURN, input="hello agent")
+        self.assertTrue(res_turn.allow)
+        self.assertEqual(len(events_fired), 1)
+        self.assertEqual(events_fired[0], ("pre_turn", "hello agent"))
+
+        # Test pre-tool blocking
+        res_allowed = reg.dispatch(HookEvent.PRE_TOOL_CALL, tool_name="read_file", args={})
+        self.assertTrue(res_allowed.allow)
+
+        res_blocked = reg.dispatch(HookEvent.PRE_TOOL_CALL, tool_name="blocked_tool", args={})
+        self.assertFalse(res_blocked.allow)
+
+    # ── 30. P2-6: Structured Observability Secret Redaction ────────
+    def test_observability_secret_redaction(self):
+        from oxy.observability import redact_secrets, EventLogger
+
+        raw_secret_str = "Authorization: Bearer sk-ant-api03-abcdef12345678901234567890 and api_key=xoxb-12345678"
+        redacted = redact_secrets(raw_secret_str)
+        self.assertNotIn("sk-ant-api03", redacted)
+        self.assertIn("***REDACTED***", redacted)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            logger = EventLogger(session_id="test_sess", log_dir=tmpdir)
+            logger.log("test_event", {
+                "api_key": "sk-1234567890abcdef1234567890abcdef",
+                "normal_text": "Clean coding agent",
+            })
+            log_file = Path(tmpdir) / "test_sess.jsonl"
+            self.assertTrue(log_file.exists())
+            import json
+            data = json.loads(log_file.read_text(encoding="utf-8").strip())
+            self.assertEqual(data["payload"]["api_key"], "***REDACTED***")
+            self.assertEqual(data["payload"]["normal_text"], "Clean coding agent")
+
 
 if __name__ == "__main__":
     unittest.main()

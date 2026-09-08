@@ -51,7 +51,7 @@ OXY is an autonomous AI coding agent designed from first principles. It discards
 
 ---
 
-## The 12 Core Subsystems
+## The 19 Core Subsystems
 
 ### 1. In-Place ANSI Terminal Menu Engine (`oxy/ui.py`)
 Traditional CLI agents rely on asynchronous background threads (e.g., `rich.live.Live` with timer polling) to redraw menus. In raw terminal mode (`tty.setraw`), timer ticks race with keystrokes, causing terminal duplication, cursor drift, and frame ghosting.
@@ -85,8 +85,8 @@ OXY enforces an append-only JSONL transaction ledger (`.oxy/sessions/<session_id
 LLMs frequently return batches of multiple tool calls in a single turn. Naive execution either runs them sequentially (high latency) or executes all operations concurrently (causing race conditions and data corruption).
 
 OXY partitions tool batches into distinct execution segments:
-- **Concurrent Read Phase**: Consecutive read-only tools (`read_file`, `file_search`, `content_search`, `list_dir`, `git_status`, `recall_memory`, `load_skill`) are grouped and executed concurrently across a `ThreadPoolExecutor(max_workers=8)`.
-- **Sequential Mutation Barrier**: Mutating operations (`write_file`, `edit_file`, `bash`, `save_memory`) flush pending read operations and execute in strict, isolated sequence.
+- **Concurrent Read Phase**: Consecutive read-only tools (`read_file`, `file_search`, `content_search`, `list_dir`, `git_status`, `recall_memory`, `load_skill`, `job_status`) are grouped and executed concurrently across a `ThreadPoolExecutor(max_workers=8)`.
+- **Sequential Mutation Barrier**: Mutating operations (`write_file`, `edit_file`, `bash`, `bash_background`, `job_cancel`, `save_memory`) flush pending read operations and execute in strict, isolated sequence.
 
 ```
 Model returns: [read(A), read(B), edit(C), read(C)]
@@ -189,6 +189,56 @@ Cockpit command dispatch is unified into a declarative registry that serves as t
   - `/skills` ──► `/skill`
 - **Dynamic Categorized Help**: Commands automatically group into `Core`, `Tools & Permissions`, `Codebase & Files`, `Memory`, `Agent & Model`, and `Session & Durability`.
 - **Direct Autocompletion Export**: Exports `SLASH_COMMANDS` directly to `prompt_toolkit`'s `WordCompleter`, guaranteeing command prompt autocompletion is always in sync with registered commands.
+
+### 13. Model Context Protocol (MCP) Stdio JSON-RPC Client (`oxy/mcp.py`)
+OXY natively connects to external tool ecosystems via the open Model Context Protocol (MCP) specification over stdio:
+- **JSON-RPC 2.0 Handshake**: Spawns external MCP server subprocesses, performs `initialize` capabilities exchange (`protocolVersion: 2024-11-05`), and emits `notifications/initialized`.
+- **Dynamic Discovery & Namespacing**: Queries `tools/list` on launch and registers tools into `ToolRegistry` and `TOOL_SCHEMAS` under the `mcp_{server}_{tool}` namespace.
+- **Security Containment**: Every dynamic MCP tool call is registered into `KNOWN_TOOLS` and checked through `SecurityGate.evaluate_tool_call()`.
+- **Clean Teardown**: `MCPManager.shutdown()` safely terminates all spawned MCP servers on exit or session end.
+
+### 14. Deterministic Lifecycle Hooks System (`oxy/hooks.py`)
+Inspired by Git hooks and Claude Code lifecycle callbacks, OXY allows developers to extend the agent without touching its core loop:
+- **Events**:
+  - `session_start`: Dispatched when the REPL initializes.
+  - `pre_turn`: Dispatched before sending a message to the LLM; can modify input or abort the turn.
+  - `pre_tool_call`: Dispatched before executing any tool; can block or modify arguments.
+  - `post_tool_call`: Dispatched after tool execution with execution status and output.
+  - `post_turn`: Dispatched after the final assistant response.
+  - `session_end`: Dispatched on clean REPL exit.
+- **Dual Support**: Supports in-memory Python callable listeners (`hooks.register(event, callback)`) and file-based workspace executable scripts (`.oxy/hooks/<event>` or `.oxy/hooks/<event>.sh`).
+- **Exception Boundary**: Hook errors are isolated and never crash the active REPL session.
+
+### 15. Non-Destructive Append-Only Ledger Rewind & Undo (`oxy/session.py`)
+Unlike naive CLI tools that physically delete files or slice records, OXY maintains a 100% durable audit trail:
+- **Append-Only Markers**: Rewind operations write an explicit `{"type": "rewind", "payload": {"message_count": N}}` entry to `.oxy/sessions/<id>.jsonl`.
+- **Deterministic Replay**: During ledger replay on session resume, `_truncate_messages_to_prefix` truncates the visible message list to the requested prefix, guaranteeing clean state reproduction while preserving full historical audits on disk.
+- **Commands**: `/rewind <N>` rewinds to the first `N` messages; `/undo` removes the last user turn and all generated responses/tool calls.
+
+### 16. Asynchronous Background Job Execution Engine (`oxy/jobs.py`, `oxy/tools.py`)
+Long-running operations (test suites, build steps, local servers) can freeze an interactive REPL. OXY provides non-blocking asynchronous execution:
+- **Subprocess Isolation**: `JobManager` launches background processes with dedicated stdout/stderr capture pipes, unique hex IDs, and thread-safe status tracking.
+- **Daemon Watcher Threads**: Lightweight threads monitor process exit status and capture tail output without blocking user conversation.
+- **Agent Tools**: Exposes `bash_background` (submits job), `job_status` (polls status and output), and `job_cancel` (terminates job).
+- **Interactive Control**: Slash command `/jobs [job_id]` inspects active or completed jobs.
+
+### 17. Thread-Safe API Key Rotation with Reactive 429 Cooldown (`oxy/keys.py`)
+High-volume agent workflows frequently hit provider rate limits (HTTP 429). OXY provides enterprise-grade key rotation:
+- **Strategy Enum**: Type-safe strategies: `SEQUENTIAL` (round-robin), `RANDOM`, and `LEAST_USED`.
+- **Lock Protection**: `threading.Lock` guarantees race-free key rotation across parallel worker threads.
+- **Reactive Cooldown**: When an HTTP 429 rate limit is received, `mark_cooldown(key, cooldown_seconds)` benches the exhausted key and skips it in subsequent rotations until its backoff window expires.
+
+### 18. Multi-Tier Workspace Memory Overlay & Multi-Signal Recall (`oxy/memory.py`)
+Persistent memory supports both global developer rules and workspace-specific team standards:
+- **Two-Tier Storage**: Global memories live in `~/.oxy/memory/`; workspace-scoped rules live in `.oxy/memory/`.
+- **Overlay Precedence**: Project-local memories take precedence over global memories during recall.
+- **Multi-Signal Relevance Scoring**: Queries match against slug identifiers, titles, and body content with keyword-frequency and proximity weighting.
+- **Index Injection**: Project memory overlays are automatically indexed and injected into the byte-frozen system prompt (`get_memory_index_text()`).
+
+### 19. Structured JSONL Observability & Secret Redaction (`oxy/observability.py`)
+Every agent decision, tool execution, and token count is logged for post-mortem analysis:
+- **Structured JSONL**: Logs to `.oxy/logs/<session_id>.jsonl` with timestamps, event types, and payloads.
+- **Secret Redaction**: Regex-based redaction intercepts API keys (`sk-...`, `sk-ant-...`, `xoxb-...`), bearer tokens, and credentials before writing to disk, ensuring logs are safe for sharing and debugging.
 
 ---
 

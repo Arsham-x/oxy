@@ -15,7 +15,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00ff88?style=flat-square)](LICENSE)
-[![Tests: 26/26](https://img.shields.io/badge/tests-26%2F26-brightgreen?style=flat-square)](tests/test_e2e_suite.py)
+[![Tests: 32/32](https://img.shields.io/badge/tests-32%2F32-brightgreen?style=flat-square)](tests/test_e2e_suite.py)
 [![Security: Hardline Floor](https://img.shields.io/badge/security-hardline%20floor-yellow?style=flat-square)](docs/SECURITY.md)
 
 *"Never write complex, bloated code when a simpler, robust architecture achieves the exact same result."*
@@ -181,7 +181,7 @@ Switch anytime with `/theme cyber` or pass `--theme aurora` at launch.
 │  └────────────────────────┬────────────────────────────────┘│
 │                           ▼                                  │
 │  ┌─────────────────────────────────────────────────────────┐│
-│  │ Tool Registry (11 tools incl. list_dir + 4 sub-agent)    ││
+│  │ Tool Registry (14 tools + dynamic MCP client)           ││
 │  └─────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -198,12 +198,15 @@ See [Architecture Deep-Dive](docs/ARCHITECTURE.md) for full subsystem documentat
 | `write_file` | mutating | Create or overwrite files |
 | `edit_file` | mutating | Exact search-and-replace with visual diffs |
 | `bash` | mutating | Run shell commands with timeout and output truncation |
+| `bash_background` | mutating | Submit non-blocking background jobs with dedicated output pipes |
+| `job_status` | read-only | Poll background job status and inspect output tails |
+| `job_cancel` | mutating | Terminate active background jobs safely |
 | `file_search` | read-only | Glob search, skips `node_modules` / `.git` / build dirs |
 | `content_search` | read-only | Grep text/regex across the workspace |
 | `list_dir` | read-only | List directory contents with dirs-first sorting and size badges |
 | `git_status` | read-only | Branch, staged files, working tree changes |
 | `save_memory` | mutating | Store persistent user preferences and project rules |
-| `recall_memory` | read-only | Query long-term knowledge base |
+| `recall_memory` | read-only | Query long-term knowledge base (global + workspace overlay) |
 | `load_skill` | read-only | Load procedural instructions on demand |
 
 ---
@@ -218,6 +221,8 @@ See [Architecture Deep-Dive](docs/ARCHITECTURE.md) for full subsystem documentat
 | `/quit` (`/exit`, `/q`) | Exit |
 | `/tools` | List tools and safety status |
 | `/permissions [ask\|auto]` (`/permission`) | View or toggle permission mode |
+| `/jobs [job_id]` | List or inspect asynchronous background jobs |
+| `/mcp` | List connected MCP servers and discovered tools |
 | `/skills [name]` (`/skill`) | List or inspect skills |
 | `/add <file>` | Pin file into context (rebuilds frozen prompt) |
 | `/drop <file>` | Remove file from context (rebuilds frozen prompt) |
@@ -228,9 +233,11 @@ See [Architecture Deep-Dive](docs/ARCHITECTURE.md) for full subsystem documentat
 | `/agent on\|off\|model\|iterations` | Toggle sub-agent, set model, or set iteration budget |
 | `/model [name]` | View or switch model |
 | `/system [text\|edit\|reload]` | View, set, edit, or reload system prompt |
-| `/keys` | Manage round-robin API keys |
+| `/keys` | Manage round-robin API keys and cooldown strategies |
 | `/sessions` | List saved sessions |
 | `/resume <id>` | Resume past session |
+| `/rewind <n>` | Rewind conversation to first `n` messages (append-only ledger) |
+| `/undo` | Undo last turn and all generated responses/tools |
 | `/history` | Show conversation turns |
 | `/save [file]` | Export to markdown |
 | `/copy` | Copy last response to clipboard |
@@ -249,17 +256,17 @@ python3 -m pytest tests/test_e2e_suite.py -v
 ```
 
 ```
-26 passed in ~4s
+32 passed in ~4s
 ```
 
-Covers: Persian typography, security floor + default-deny, schema coercion, transaction ledger (durability + orphan recovery), parallel planner, skills system, KV cache + prompt refresh seam, command registry (dispatch + aliases), raw key parser, cockpit header, status line, thinking blocks, turn metadata, permission modes, atomic config, `list_dir`, token-budgeted compaction, sub-agent scoping, streaming assembly.
+Covers: Persian typography, security floor + default-deny, schema coercion, transaction ledger (durability + orphan recovery), parallel planner, skills system, KV cache + prompt refresh seam, command registry (dispatch + aliases), raw key parser, cockpit header, status line, thinking blocks, turn metadata, permission modes, atomic config, `list_dir`, token-budgeted compaction, sub-agent scoping, streaming assembly, KeyManager cooldown & thread lock, append-only rewind & undo, project memory overlay, background jobs engine, deterministic lifecycle hooks, and structured observability with secret redaction.
 
 ---
 
 ## Documentation
 
-- **[Architecture](docs/ARCHITECTURE.md)** — System topology, streaming, compaction budgets, command registry, sub-agents, all 12 subsystems
-- **[Security](docs/SECURITY.md)** — Hardline floor spec, deny-by-default, steering file protection
+- **[Architecture](docs/ARCHITECTURE.md)** — System topology, streaming, compaction budgets, command registry, sub-agents, MCP, hooks, background jobs, all 19 subsystems
+- **[Security](docs/SECURITY.md)** — Hardline floor spec, deny-by-default, steering file protection, MCP sandboxing, telemetry redaction
 - **[Skills](docs/SKILLS.md)** — Progressive disclosure protocol, writing custom skills
 - **[CLI Reference](docs/CLI_REFERENCE.md)** — Flags, slash commands (incl. `/compact`, `/agent` controls), keyboard bindings
 - **[Reconnaissance](docs/PHASE0_RECONNAISSANCE.md)** — Phase 0 audit: strengths, weaknesses, gaps, risks, P0–P3 roadmap

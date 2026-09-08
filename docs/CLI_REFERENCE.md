@@ -51,8 +51,10 @@ All slash commands support **Tab Autocompletion**.
 ### Tools & Permissions
 | Command | Aliases | Arguments | Description |
 | :--- | :--- | :--- | :--- |
-| `/tools` | — | None | List all 11 registered agent tools, parameters, and safety classifications. |
+| `/tools` | — | None | List all 14 registered agent tools, parameters, and safety classifications. |
 | `/permissions` | `/permission` | `[ask\|auto]` | View current permission mode or toggle between interactive and autonomous execution. |
+| `/jobs` | — | `[job_id]` | List background jobs, or inspect one job's status and output tail. |
+| `/mcp` | — | None | List connected MCP servers and their discovered tools. |
 
 ### Procedural Skills
 | Command | Aliases | Arguments | Description |
@@ -65,6 +67,8 @@ All slash commands support **Tab Autocompletion**.
 | :--- | :--- | :--- | :--- |
 | `/sessions` | — | None | List saved session transaction ledgers, turn counts, and modification dates. |
 | `/resume` | — | `<id>` | Hot-swap active conversation state by replaying a session ledger from disk. |
+| `/rewind` | — | `<n>` | Rewind conversation to the first `n` messages (append-only ledger marker). |
+| `/undo` | — | None | Undo the last user turn and all generated responses/tools (append-only ledger marker). |
 | `/history` | — | None | Print complete message history of the current session. |
 | `/save` | — | `[path]` | Export dialogue and tool execution traces to a formatted Markdown file. |
 

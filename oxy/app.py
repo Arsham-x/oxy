@@ -6,6 +6,7 @@ Wires together: config, engine, tools, memory, repo, render, input, commands.
 
 from __future__ import annotations
 
+import os
 import signal
 import argparse
 from datetime import datetime
@@ -16,6 +17,7 @@ from .config import (
     validate_config, CONFIG_FILE, DEFAULT_CONFIG,
 )
 from .engine import ChatEngine
+from .hooks import hooks, HookEvent
 from .keys import KeyManager
 from .memory import list_memories
 from .render import (
@@ -95,6 +97,10 @@ def main():
             strategy=config.get("round_robin_strategy", "sequential"),
         )
 
+    # ── Project Memory Overlay ─────────────────────────────────
+    from .memory import set_project_memory_root
+    set_project_memory_root(os.getcwd())
+
     # ── Engine ─────────────────────────────────────────────────
     engine = ChatEngine(config, key_manager)
     engine.system_prompt = resolve_system_prompt(config)
@@ -139,6 +145,12 @@ def main():
             render_error_panel(f"Agent failed: {type(e).__name__}: {e}", theme)
         return
 
+    # ── Session Lifecycle Hook: SESSION_START ──────────────────
+    try:
+        hooks.dispatch(HookEvent.SESSION_START, config=config, session_id=engine.session.session_id)
+    except Exception:
+        pass
+
     # ── Welcome ────────────────────────────────────────────────
     print_welcome(config, theme, engine=engine)
 
@@ -175,6 +187,12 @@ def main():
             console.print()
             continue
         except EOFError:
+            try:
+                hooks.dispatch(HookEvent.SESSION_END, session_id=engine.session.session_id)
+                if getattr(engine, "mcp", None):
+                    engine.mcp.shutdown()
+            except Exception:
+                pass
             print_goodbye(len(engine.history), engine.tokens.total,
                          (datetime.now() - start_time).total_seconds(), theme)
             break
@@ -193,6 +211,12 @@ def main():
                 theme = new_theme
                 session = make_prompt_session(theme)
             if not keep_running:
+                try:
+                    hooks.dispatch(HookEvent.SESSION_END, session_id=engine.session.session_id)
+                    if getattr(engine, "mcp", None):
+                        engine.mcp.shutdown()
+                except Exception:
+                    pass
                 print_goodbye(len(engine.history), engine.tokens.total,
                              (datetime.now() - start_time).total_seconds(), theme)
                 break

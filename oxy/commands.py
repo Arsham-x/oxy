@@ -54,6 +54,8 @@ COMMANDS: tuple[Command, ...] = (
     Command("/tools",       "tools",       "list all agent tools and safety status",                group="Tools & Permissions"),
     Command("/permissions", "permissions", "view or toggle permission mode",    usage="[ask|auto]", aliases=("/permission",), group="Tools & Permissions"),
     Command("/skills",      "skills",      "list installed skills or view skill instructions", usage="[name]", aliases=("/skill",), group="Tools & Permissions"),
+    Command("/jobs",        "jobs",        "list background jobs or inspect one", usage="[job_id]", group="Tools & Permissions"),
+    Command("/mcp",         "mcp",         "list connected MCP servers and tools",                  group="Tools & Permissions"),
     # Codebase & Files (Aider-style)
     Command("/add",         "add",         "add file to active chat context",   usage="<file>",  needs_arg=True, group="Codebase & Files"),
     Command("/drop",        "drop",        "drop file from active chat context", usage="<file>", needs_arg=True, group="Codebase & Files"),
@@ -69,6 +71,8 @@ COMMANDS: tuple[Command, ...] = (
     # Session & Durability
     Command("/sessions",    "sessions",    "list saved session transaction ledgers",                 group="Session & Durability"),
     Command("/resume",      "resume",      "resume past session from disk",       usage="<id>", needs_arg=True, group="Session & Durability"),
+    Command("/rewind",      "rewind",      "rewind to first N messages (append-only)", usage="<n>", needs_arg=True, group="Session & Durability"),
+    Command("/undo",        "undo",        "undo last user turn (append-only)",                     group="Session & Durability"),
     Command("/history",     "history",     "show conversation history turns",                       group="Session & Durability"),
     Command("/save",        "save",        "export conversation to markdown",     usage="[file]",  group="Session & Durability"),
     Command("/copy",        "copy",        "copy last AI response to clipboard",                    group="Session & Durability"),
@@ -645,6 +649,89 @@ def cmd_resume(engine: ChatEngine, session_id: str, theme: dict):
         render_error(f"Failed to resume session '{session_id}': {e}", theme)
 
 
+def cmd_rewind(engine: ChatEngine, arg: str, theme: dict):
+    if not arg or not arg.strip().isdigit():
+        render_error("usage: /rewind <message_count>", theme)
+        return
+    count = int(arg.strip())
+    summary = engine.session.rewind_to_message_count(count)
+    engine.history = [m for m in engine.session.messages if m.get("role") in ("user", "assistant", "tool")]
+    render_info(
+        f"rewound to first {summary['after']} messages ({summary['removed']} removed, append-only marker recorded)",
+        theme,
+    )
+
+
+def cmd_undo(engine: ChatEngine, theme: dict):
+    summary = engine.session.undo_last_turn()
+    if summary["removed"] == 0:
+        render_info("nothing to undo — history has no prior user turn", theme)
+        return
+    engine.history = [m for m in engine.session.messages if m.get("role") in ("user", "assistant", "tool")]
+    render_info(
+        f"undid last turn ({summary['removed']} messages removed; {summary['after']} remaining)",
+        theme,
+    )
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  /jobs & /mcp — Background Jobs and MCP Servers
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def cmd_jobs(engine: ChatEngine, arg: str, theme: dict):
+    """List background jobs or show details/output for one job."""
+    mgr = getattr(engine, "jobs", None)
+    if mgr is None:
+        from .tools import get_job_manager
+        mgr = get_job_manager()
+
+    job_id = arg.strip()
+    if job_id:
+        res = engine.tools.execute("job_status", {"job_id": job_id})
+        if res.success:
+            console.print(Panel(res.output, title=f"[bold cyan]Job {job_id}[/]",
+                                border_style=theme["accent"], box=box.ROUNDED))
+        else:
+            render_error(res.output, theme)
+        console.print()
+        return
+
+    jobs = mgr.list_jobs()
+    if not jobs:
+        render_info("no background jobs yet (use bash_background tool to start one)", theme)
+        return
+
+    t = Table(title="Background Jobs", box=box.ROUNDED, border_style=theme["accent"])
+    t.add_column("Job ID", style="bold cyan")
+    t.add_column("Command", style="white")
+    t.add_column("Status", style="green")
+    t.add_column("Elapsed", justify="right", style=theme["dim"])
+    for j in jobs:
+        t.add_row(j["job_id"], j["command"][:60], j["status"], f"{j['elapsed']}s")
+    console.print(t)
+    console.print(f"  [{theme['dim']}]Inspect one with: [bold cyan]/jobs <job-id>[/]\n")
+
+
+def cmd_mcp(engine: ChatEngine, theme: dict):
+    """List connected MCP servers and their discovered tools."""
+    mcp = getattr(engine, "mcp", None)
+    if mcp is None or not getattr(mcp, "clients", {}):
+        render_info("no MCP servers connected (configure 'mcp_servers' in oxy_config.json)", theme)
+        return
+
+    t = Table(title="MCP Servers", box=box.ROUNDED, border_style=theme["accent"])
+    t.add_column("Server", style="bold cyan")
+    t.add_column("Tools", style="white")
+    for name, client in mcp.clients.items():
+        tools = client.get_registered_tools()
+        names = ", ".join(tool.get("name", "?") for tool in tools[:8]) or "(none)"
+        if len(tools) > 8:
+            names += f"  … +{len(tools) - 8} more"
+        t.add_row(name, names)
+    console.print(t)
+    console.print()
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  Command Dispatcher
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -681,6 +768,10 @@ def handle_command(engine: ChatEngine, line: str, config: dict, theme: dict) -> 
             cmd_permissions(engine, arg, theme)
         case "skills":
             cmd_skills(engine, arg, theme)
+        case "jobs":
+            cmd_jobs(engine, arg, theme)
+        case "mcp":
+            cmd_mcp(engine, theme)
         case "add":
             cmd_add(engine, arg, theme)
         case "drop":
@@ -703,6 +794,10 @@ def handle_command(engine: ChatEngine, line: str, config: dict, theme: dict) -> 
             cmd_sessions(engine, arg, theme)
         case "resume":
             cmd_resume(engine, arg, theme)
+        case "rewind":
+            cmd_rewind(engine, arg, theme)
+        case "undo":
+            cmd_undo(engine, theme)
         case "history":
             cmd_history(engine, theme)
         case "save":

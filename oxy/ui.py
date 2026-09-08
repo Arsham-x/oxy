@@ -23,6 +23,8 @@ from rich.text import Text
 from rich.cells import cell_len
 from rich import box
 
+from .compat import supports_raw, flush_input, read_key, fallback_select
+
 try:
     import arabic_reshaper
     from bidi.algorithm import get_display as bidi_get_display
@@ -99,52 +101,12 @@ def reshape_markdown(md_text: str) -> str:
 #  Interactive Arrow-Key Selector (In-Place ANSI Engine)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def _read_raw_key(fd: int) -> str:
-    """Read a single keypress directly from raw OS file descriptor."""
-    try:
-        b = os.read(fd, 32)
-    except Exception:
-        return ""
+def _read_raw_key(fd: int | None = None) -> str:
+    """Read a single keypress via the cross-platform compat layer.
 
-    if not b:
-        return ""
-
-    if b == b"\x03":
-        raise KeyboardInterrupt()
-
-    # Up arrow
-    if b in (b"\x1b[A", b"\x1bOA", b"k", b"K") or (b.startswith(b"\x1b[") and b.endswith(b"A")):
-        return "up"
-
-    # Down arrow
-    if b in (b"\x1b[B", b"\x1bOB", b"j", b"J") or (b.startswith(b"\x1b[") and b.endswith(b"B")):
-        return "down"
-
-    # Enter
-    if b in (b"\r", b"\n"):
-        return "enter"
-
-    # Direct 1-9 selection
-    if len(b) == 1 and b in b"123456789":
-        return b.decode("ascii")
-
-    # Chunked escape sequences
-    if b.startswith(b"\x1b"):
-        import select
-        r, _, _ = select.select([fd], [], [], 0.04)
-        if r:
-            try:
-                extra = os.read(fd, 32)
-                full = b + extra
-                if full.endswith(b"A"):
-                    return "up"
-                if full.endswith(b"B"):
-                    return "down"
-            except Exception:
-                pass
-        return "esc"
-
-    return ""
+    Kept as a thin wrapper for backwards compatibility (tests import it).
+    """
+    return read_key(fd)
 
 
 def select_menu(
@@ -161,6 +123,8 @@ def select_menu(
     """
     if not sys.stdin.isatty():
         return default
+    if not supports_raw():
+        return fallback_select(title, options, default=default)
 
     theme = theme or {}
     theme_name = theme.get("name", "Cyber").lower()
@@ -211,11 +175,12 @@ def select_menu(
         lines.append(f"  {dim}{hint}{reset}")
         return lines
 
-    import tty
-    import termios
-
     fd = sys.stdin.fileno()
-    old_term = termios.tcgetattr(fd)
+    old_term = None
+    if os.name != "nt":
+        import tty
+        import termios
+        old_term = termios.tcgetattr(fd)
 
     sys.stdout.write("\033[?25l")
     sys.stdout.flush()
@@ -228,8 +193,10 @@ def select_menu(
     sys.stdout.flush()
 
     try:
-        tty.setraw(fd)
-        termios.tcflush(fd, termios.TCIFLUSH)
+        if os.name != "nt":
+            import tty
+            tty.setraw(fd)
+        flush_input()
         while True:
             try:
                 key = _read_raw_key(fd)
@@ -255,11 +222,10 @@ def select_menu(
             sys.stdout.flush()
 
     finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_term)
-        try:
-            termios.tcflush(fd, termios.TCIFLUSH)
-        except Exception:
-            pass
+        if old_term is not None:
+            import termios
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_term)
+        flush_input()
 
         sys.stdout.write(f"\033[{line_count}A\r\033[0J")
         chosen_label, _ = options[current]

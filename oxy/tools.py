@@ -25,6 +25,15 @@ from typing import Any, Callable
 
 from .schemas import sanitize_tool_definition, coerce_tool_arguments
 from .security import SecurityGate, SecurityVerdict
+from .jobs import JobManager
+
+
+_JOB_MANAGER = JobManager()
+
+
+def get_job_manager() -> JobManager:
+    """Return the global background job manager."""
+    return _JOB_MANAGER
 
 
 # Directories ignored by search tools to avoid flooding context
@@ -302,6 +311,60 @@ def bash(command: str, timeout: int = DEFAULT_BASH_TIMEOUT) -> ToolResult:
     )
 
 
+def bash_background(command: str, timeout: int = 300) -> ToolResult:
+    """Submit a shell command to execute asynchronously in the background."""
+    cmd_clean = command.strip()
+    if not cmd_clean:
+        return ToolResult(False, "Error: empty command.")
+
+    dangerous_patterns = [
+        r"\brm\s+-[a-zA-Z]*rf\s+/\s*$",
+        r"\brm\s+-[a-zA-Z]*rf\s+~\s*$",
+        r"\brm\s+-[a-zA-Z]*rf\s+/\*",
+        r"\b(mkfs|dd\s+if=.*of=/dev/)",
+    ]
+    for pat in dangerous_patterns:
+        if re.search(pat, cmd_clean):
+            return ToolResult(False, "Safety Block: Catastrophic command detected and blocked by OXY guardrails.")
+
+    try:
+        job = _JOB_MANAGER.submit(cmd_clean, timeout=timeout)
+        return ToolResult(
+            True,
+            f"Background job started with ID: {job.job_id}\nCommand: {job.command}\nStatus: {job.status}\nUse job_status(job_id='{job.job_id}') to inspect status or output.",
+            metadata={"job_id": job.job_id, "status": job.status, "command": command},
+        )
+    except Exception as e:
+        return ToolResult(False, f"Failed to launch background job: {e}")
+
+
+def job_status(job_id: str) -> ToolResult:
+    """Check the status, elapsed time, and output of a background job."""
+    info = _JOB_MANAGER.status(job_id)
+    if not info.get("found"):
+        return ToolResult(False, f"Job '{job_id}' not found.")
+    output = (
+        f"Job ID: {info['job_id']}\n"
+        f"Status: {info['status']}\n"
+        f"Elapsed: {info['elapsed']}s\n"
+        f"Returncode: {info['returncode']}\n"
+        f"Command: {info['command']}\n\n"
+        f"Output Tail:\n{info['output_tail'] or '(no output yet)'}"
+    )
+    return ToolResult(True, output, metadata=info)
+
+
+def job_cancel(job_id: str) -> ToolResult:
+    """Cancel a running background job."""
+    ok = _JOB_MANAGER.cancel(job_id)
+    if ok:
+        return ToolResult(True, f"Job '{job_id}' cancelled successfully.", metadata={"job_id": job_id, "status": "cancelled"})
+    info = _JOB_MANAGER.status(job_id)
+    if not info.get("found"):
+        return ToolResult(False, f"Job '{job_id}' not found.")
+    return ToolResult(False, f"Could not cancel job '{job_id}': status is '{info['status']}'.")
+
+
 def file_search(pattern: str, path: str = ".", max_results: int = 50) -> ToolResult:
     """Search for files matching a glob pattern, skipping noisy directories."""
     base = Path(path).expanduser().resolve()
@@ -462,11 +525,12 @@ def tool_save_memory(
     category: str = "project",
     content: str = "",
     description: str = "",
+    scope: str = "global",
 ) -> ToolResult:
-    """Save knowledge to persistent memory across sessions."""
+    """Save knowledge to persistent memory across sessions (global or project overlay)."""
     from .memory import save_memory as mem_save
     try:
-        msg = mem_save(slug=slug, title=title, category=category, content=content, description=description)
+        msg = mem_save(slug=slug, title=title, category=category, content=content, description=description, scope=scope)
         return ToolResult(True, msg)
     except Exception as e:
         return ToolResult(False, f"Error saving memory: {e}")
@@ -481,7 +545,9 @@ def tool_recall_memory(query: str) -> ToolResult:
             return ToolResult(True, f"No memories found matching '{query}'.")
         lines = [f"Found {len(hits)} memory items:"]
         for h in hits:
-            lines.append(f"\n--- {h['title']} ({h['category']}) [{h['slug']}.md] ---")
+            scope_tag = f" · {h.get('scope', 'global')}" if "scope" in h else ""
+            score_tag = f" (score {h['score']})" if "score" in h else ""
+            lines.append(f"\n--- {h['title']} ({h['category']}{scope_tag}) [{h['slug']}.md]{score_tag} ---")
             if h['description']:
                 lines.append(f"Description: {h['description']}")
             lines.append(h['body'])
@@ -712,6 +778,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                         "type": "string",
                         "description": "One-line hook summary for the index.",
                     },
+                    "scope": {
+                        "type": "string",
+                        "enum": ["global", "project"],
+                        "description": "Memory scope: global (~/.oxy/memory) or project (.oxy/memory overlay). Default global.",
+                    },
                 },
                 "required": ["slug", "title", "content"],
             },
@@ -751,6 +822,61 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "bash_background",
+            "description": "Submit a shell command to execute asynchronously in the background. Returns a job_id for monitoring.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The shell command to run in the background.",
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Maximum execution time in seconds (default: 300).",
+                    },
+                },
+                "required": ["command"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "job_status",
+            "description": "Check the status, running time, exit code, and recent output of a background job.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "job_id": {
+                        "type": "string",
+                        "description": "The background job identifier.",
+                    },
+                },
+                "required": ["job_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "job_cancel",
+            "description": "Cancel a currently running background job by its job ID.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "job_id": {
+                        "type": "string",
+                        "description": "The job ID to terminate.",
+                    },
+                },
+                "required": ["job_id"],
+            },
+        },
+    },
 ]
 
 
@@ -763,6 +889,9 @@ class ToolRegistry:
             "write_file": write_file,
             "edit_file": edit_file,
             "bash": bash,
+            "bash_background": bash_background,
+            "job_status": job_status,
+            "job_cancel": job_cancel,
             "file_search": file_search,
             "content_search": content_search,
             "list_dir": list_dir,
@@ -773,7 +902,7 @@ class ToolRegistry:
         }
         # Tools that are read-only and safe to auto-execute without asking
         self._safe_tools = {
-            "read_file", "file_search", "content_search", "list_dir", "git_status", "recall_memory", "load_skill"
+            "read_file", "file_search", "content_search", "list_dir", "git_status", "recall_memory", "load_skill", "job_status"
         }
 
     def register(self, name: str, fn: Callable[..., ToolResult], safe: bool = False):

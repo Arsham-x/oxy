@@ -87,6 +87,9 @@ KNOWN_TOOLS = {
     "write_file",
     "edit_file",
     "bash",
+    "bash_background",
+    "job_status",
+    "job_cancel",
     "file_search",
     "content_search",
     "list_dir",
@@ -178,7 +181,7 @@ class SecurityGate:
 
         DENY-BY-DEFAULT: Unknown tools are BLOCKED, not allowed.
         """
-        if tool_name == "bash":
+        if tool_name in ("bash", "bash_background"):
             cmd = tool_args.get("command", "")
             return cls.check_bash_command(cmd)
 
@@ -191,8 +194,12 @@ class SecurityGate:
             return cls.check_file_path(path, operation="read")
 
         # Known safe tools that require no further checks
-        elif tool_name in ("list_dir", "file_search", "content_search", "git_status", "save_memory", "recall_memory", "load_skill"):
+        elif tool_name in ("list_dir", "file_search", "content_search", "git_status", "save_memory", "recall_memory", "load_skill", "job_status", "job_cancel"):
             return SecurityDecision(SecurityVerdict.ALLOWED, "Tool action allowed")
+
+        # Dynamically registered MCP tools (prefixed with mcp_)
+        elif tool_name.startswith("mcp_") and tool_name in KNOWN_TOOLS:
+            return SecurityDecision(SecurityVerdict.ALLOWED, "MCP tool action allowed")
 
         # Deny-by-default: Unknown tools must be explicitly approved
         return SecurityDecision(

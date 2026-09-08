@@ -26,10 +26,32 @@ from typing import Any, Iterator
 #  Ledger Entry
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+def _truncate_messages_to_prefix(
+    messages: list[dict[str, Any]],
+    target_id: str,
+    payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Map a rewind marker to the visible message prefix.
+
+    The ledger is append-only; nothing is deleted. The marker records where
+    the operator asked to return to, identified either by entry id or by
+    message count. Returns the truncated copy.
+    """
+    if not target_id and "message_count" in payload:
+        try:
+            count = int(payload.get("message_count", 0))
+            return list(messages[: max(0, count)])
+        except (TypeError, ValueError):
+            return list(messages)
+    # Entry-id markers are advisory: keep full history unless a count is given.
+    # The engine drops pending tool calls separately via discard helpers.
+    return list(messages)
+
+
 @dataclass
 class LedgerEntry:
     entry_id: str
-    entry_type: str  # "system", "user", "assistant", "tool_result", "checkpoint"
+    entry_type: str  # "system", "user", "assistant", "tool_result", "checkpoint", "rewind"
     timestamp: float
     payload: dict[str, Any]
 
@@ -171,6 +193,16 @@ class Session:
                     }
                     self.messages.append(msg)
 
+                elif t == "compaction_checkpoint":
+                    prior = p.get("summary", "") or p.get("summary_preview", "")
+                    if prior:
+                        self.messages.append({"role": "system", "content": prior})
+
+                elif t == "rewind":
+                    # Non-destructive rewind marker: hide turns after the target prefix.
+                    target_id = p.get("rewind_to_entry_id", "")
+                    self.messages = _truncate_messages_to_prefix(self.messages, target_id, p)
+
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  Transaction Durability Operations
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -256,6 +288,40 @@ class Session:
         count = len(self.pending_tool_calls)
         self.pending_tool_calls.clear()
         return count
+
+    def rewind_to_message_count(self, message_count: int) -> dict[str, Any]:
+        """Append a non-destructive rewind marker and truncate in-memory history.
+
+        The JSONL ledger is append-only: prior turns remain on disk for audit,
+        but replay honors the latest rewind marker so resumed sessions show the
+        rewound prefix. Returns a summary dict for command feedback.
+        """
+        before = len(self.messages)
+        message_count = max(0, min(int(message_count), before))
+        removed = before - message_count
+        self._append_entry("rewind", {
+            "message_count": message_count,
+            "removed": removed,
+            "before_count": before,
+        })
+        self.messages = list(self.messages[:message_count])
+        # Drop pending dispatches that belonged to pruned turns.
+        self.pending_tool_calls.clear()
+        return {"before": before, "after": message_count, "removed": removed}
+
+    def undo_last_turn(self) -> dict[str, Any]:
+        """Remove the most recent user→assistant→tool exchange.
+
+        Walks backwards past trailing tool/assistant messages to the last user
+        message, then rewinds to just before it. Returns the rewind summary.
+        If no user message exists, returns removed=0.
+        """
+        idx = len(self.messages) - 1
+        while idx >= 0 and self.messages[idx].get("role") in ("tool", "assistant", "system"):
+            idx -= 1
+        if idx < 0 or self.messages[idx].get("role") != "user":
+            return {"before": len(self.messages), "after": len(self.messages), "removed": 0}
+        return self.rewind_to_message_count(idx)
 
     def get_context_messages(self, max_turns: int = 20) -> list[dict[str, Any]]:
         """Get sliding window of conversation messages for inference."""

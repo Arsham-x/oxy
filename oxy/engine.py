@@ -27,11 +27,14 @@ from .render import (
     render_thought, render_compaction_notice, get_theme,
 )
 from .keys import KeyManager
-from .tools import ToolRegistry, ToolResult
+from .tools import ToolRegistry, ToolResult, get_job_manager
 from .memory import get_memory_index_text
 from .repo import RepoContext
 from .session import Session
 from .skills import SkillManager
+from .hooks import hooks, HookEvent
+from .observability import EventLogger
+from .mcp import MCPManager
 
 
 MAX_RETRIES = 3
@@ -154,6 +157,18 @@ class ChatEngine:
         session_id = config.get("session_id")
         self.session = Session(session_id=session_id, title=config.get("session_title", "OXY Interactive Session"))
 
+        # Observability & Hooks Telemetry
+        self.logger = EventLogger(session_id=self.session.session_id)
+
+        # Background Jobs
+        self.jobs = get_job_manager()
+
+        # MCP Servers & Tools
+        self.mcp = MCPManager()
+        if "mcp_servers" in self.config:
+            self.mcp.load_from_config(self.config)
+            self.mcp.register_tools_into(self.tools)
+
         # Permission state: 'ask' (interactive prompt on mutating tools) or 'auto'
         self.permission_mode = config.get("permission_mode", "ask")
         self.always_allow: set[str] = set()
@@ -166,12 +181,19 @@ class ChatEngine:
         self._frozen_system_prompt = self._assemble_frozen_system_prompt()
 
     def _resolve_key(self) -> str:
-        if self.key_manager and self.key_manager.is_active:
+        if self.key_manager and self.key_manager.count > 0:
             return self.key_manager.next_key()
         return self.config.get("api_key", "")
 
-    def _rotate_client(self):
-        if self.key_manager and self.key_manager.is_active:
+    def _rotate_client(self, rate_limited_key: str | None = None, cooldown_seconds: float = 60.0):
+        """Rotate to the next available API key, optionally marking the current key in cooldown.
+
+        If rate_limited_key is set, the exhausted key enters cooldown so subsequent
+        rotations skip it until the cooldown expires.
+        """
+        if self.key_manager and self.key_manager.count > 0:
+            if rate_limited_key:
+                self.key_manager.mark_cooldown(rate_limited_key, cooldown_seconds)
             new_key = self.key_manager.next_key()
             self.client = OpenAI(base_url=self.config["base_url"], api_key=new_key)
 
@@ -389,6 +411,12 @@ class ChatEngine:
 
         Returns final assistant text, or None if cancelled/failed.
         """
+        # PRE_TURN hooks: allow listeners/scripts to inspect or block the turn.
+        pre = hooks.dispatch(HookEvent.PRE_TURN, input=user_input)
+        if not pre.allow:
+            self.logger.log_error("hook_blocked", pre.error or "pre_turn blocked")
+            return pre.error or "Turn blocked by pre_turn hook."
+
         self.history.append({"role": "user", "content": user_input})
         self.session.commit_user_message(user_input)
 
@@ -435,6 +463,7 @@ class ChatEngine:
                 pt = response.usage.prompt_tokens or 0
                 ct = response.usage.completion_tokens or 0
                 self.tokens.add(pt, ct)
+                self.logger.log_llm_call(self.config.get("model", ""), pt, ct)
 
             # ── Check if the model wants to call tools ──
             if message.tool_calls:
@@ -485,6 +514,7 @@ class ChatEngine:
                                 args = {}
                             args_str = ", ".join(f"{k}={repr(v)[:25]}" for k, v in args.items())
                             render_tool_start(t_name, args_str, self._theme, is_parallel=True)
+                            self.logger.log_tool_call(t_name, args)
 
                         start_t = time.perf_counter()
                         batch_results = self.tools.execute_batch(batch)
@@ -502,6 +532,8 @@ class ChatEngine:
                                 summary = f"{tool_result.metadata.get('count', 0)} matches"
 
                             render_tool_result(t_name, tool_result.success, summary, self._theme, elapsed_ms=total_elapsed_ms)
+                            self.logger.log_tool_result(t_name, tool_result.success, tool_result.output, total_elapsed_ms)
+                            hooks.dispatch(HookEvent.POST_TOOL_CALL, tool_name=t_name, success=tool_result.success, output=tool_result.output)
                             self.session.commit_tool_result(tc_id, t_name, tool_result.output)
                             self.history.append({
                                 "role": "tool",
@@ -526,6 +558,21 @@ class ChatEngine:
                             args_summary = ", ".join(f"{k}={repr(v)[:30]}" for k, v in args.items())
                             if len(args_summary) > 60:
                                 args_summary = args_summary[:57] + "..."
+
+                            # Pre-Tool Lifecycle Hook Check
+                            hook_res = hooks.dispatch(HookEvent.PRE_TOOL_CALL, tool_name=tool_name, args=args)
+                            if not hook_res.allow:
+                                denial_msg = hook_res.error or f"Tool '{tool_name}' blocked by pre_tool_call hook."
+                                render_tool_result(tool_name, False, "blocked by hook", self._theme)
+                                self.session.commit_tool_result(tc["id"], tool_name, denial_msg)
+                                self.history.append({
+                                    "role": "tool",
+                                    "tool_call_id": tc["id"],
+                                    "name": tool_name,
+                                    "content": denial_msg,
+                                })
+                                self.logger.log_tool_result(tool_name, False, denial_msg, 0.0)
+                                continue
 
                             # Permission Gate Check
                             is_safe = self.tools.is_safe(tool_name)
@@ -555,6 +602,7 @@ class ChatEngine:
 
                             # Execute tool with timing telemetry
                             render_tool_start(tool_name, args_summary, self._theme, is_parallel=False)
+                            self.logger.log_tool_call(tool_name, args)
                             t0 = time.perf_counter()
                             tool_result: ToolResult = self.tools.execute(tool_name, args)
                             elapsed_ms = (time.perf_counter() - t0) * 1000
@@ -572,6 +620,8 @@ class ChatEngine:
                                 summary = "completed"
 
                             render_tool_result(tool_name, tool_result.success, summary, self._theme, elapsed_ms=elapsed_ms)
+                            self.logger.log_tool_result(tool_name, tool_result.success, tool_result.output, elapsed_ms)
+                            hooks.dispatch(HookEvent.POST_TOOL_CALL, tool_name=tool_name, success=tool_result.success, output=tool_result.output)
 
                             # Show syntax-highlighted diff if edit_file produced one
                             if tool_result.diff:
@@ -614,6 +664,12 @@ class ChatEngine:
                     ct = response.usage.completion_tokens or 0
                     render_token_info(pt, ct, self.tokens.total, self._theme)
                 console.print()
+
+            # POST_TURN lifecycle signal
+            try:
+                hooks.dispatch(HookEvent.POST_TURN, response=content)
+            except Exception:
+                pass
 
             return content
 
@@ -838,6 +894,7 @@ class ChatEngine:
                             except ValueError:
                                 pass
 
+                    current_api_key = getattr(self.client, "api_key", None)
                     d = self._theme["dim"]
                     for remaining in range(wait, 0, -1):
                         console.print(
@@ -846,7 +903,7 @@ class ChatEngine:
                         )
                         time.sleep(1)
                     console.print()
-                    self._rotate_client()
+                    self._rotate_client(rate_limited_key=current_api_key, cooldown_seconds=float(wait * 2))
                     continue
                 else:
                     self._pop_failed_user_msg()
