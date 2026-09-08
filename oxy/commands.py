@@ -8,7 +8,6 @@ import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from rich.table import Table
 from rich.panel import Panel
@@ -17,10 +16,10 @@ from rich import box
 from .config import save_config, resolve_system_prompt
 from .render import (
     console, render_info, render_error, render_system_prompt,
-    render_token_table, render_error_panel, get_theme, THEMES,
+    render_token_table, get_theme, list_themes,
 )
 from .engine import ChatEngine, SubAgent, SUB_AGENT_PERSONAS
-from .memory import list_memories, recall_memory, delete_memory, clear_all_memories, get_memory_index_text
+from .memory import list_memories, recall_memory, clear_all_memories
 from .session import Session, SessionRegistry
 from .skills import SkillManager
 
@@ -29,7 +28,7 @@ from .skills import SkillManager
 #  Command Registry — single source of truth for all slash commands
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -77,7 +76,8 @@ COMMANDS: tuple[Command, ...] = (
     Command("/save",        "save",        "export conversation to markdown",     usage="[file]",  group="Session & Durability"),
     Command("/copy",        "copy",        "copy last AI response to clipboard",                    group="Session & Durability"),
     Command("/tokens",      "tokens",      "show token usage summary",                              group="Session & Durability"),
-    Command("/theme",       "theme",       "switch theme (minimal/cyber/aurora)", usage="[name]",  group="Session & Durability"),
+    Command("/theme",       "theme",       "switch theme (minimal/cyber/aurora or custom)", usage="[name]",  group="Session & Durability"),
+    Command("/lang",        "lang",        "switch interface language (en/fa/zh)", usage="[code]", aliases=("/language",), group="Session & Durability"),
     Command("/config",      "config",      "view current configuration",                            group="Session & Durability"),
 )
 
@@ -115,8 +115,6 @@ def cmd_help(theme: dict):
     t.add_row("[dim]alt+enter[/]", "[dim]new line[/]")
     t.add_row("[dim]ctrl+c[/]", "[dim]cancel generation / tool[/]")
     t.add_row("[dim]↑ / ↓[/]", "[dim]browse input history[/]")
-    for cmd, desc in []:
-        t.add_row(cmd, desc)
 
     console.print(t)
     console.print()
@@ -355,9 +353,9 @@ def _show_agent_status(config: dict, theme: dict):
     d = theme["dim"]
     console.print(f"  [{d}]Personas available: architect, debugger, reviewer, general[/]")
     console.print(f"  [{d}]Usage:[/] /agent architect <design task>")
-    console.print(f"         /agent debugger <error/bug investigation>")
-    console.print(f"         /agent reviewer <audit task>")
-    console.print(f"         /agent <general task>")
+    console.print("         /agent debugger <error/bug investigation>")
+    console.print("         /agent reviewer <audit task>")
+    console.print("         /agent <general task>")
     console.print()
 
 
@@ -503,20 +501,45 @@ def _copy_to_clipboard(text: str) -> bool:
 
 
 def cmd_theme(arg: str, config: dict, theme: dict) -> dict | None:
+    available = list_themes()
     if not arg:
-        available = ", ".join(THEMES.keys())
         current = config.get("theme", "minimal")
-        render_info(f"theme: {current}  (available: {available})", theme)
+        render_info(f"theme: {current}  (available: {', '.join(available)})", theme)
         return None
 
-    if arg not in THEMES:
-        render_error(f"unknown theme: {arg}  (try: minimal, cyber, aurora)", theme)
+    slug = arg.lower().strip()
+    if slug not in available:
+        render_error(f"unknown theme: {arg}  (try: {', '.join(available)})", theme)
         return None
 
-    config["theme"] = arg
-    new_theme = get_theme(arg)
-    render_info(f"theme → {new_theme['name']}", new_theme)
+    config["theme"] = slug
+    try:
+        from .render import THEME_REGISTRY
+        THEME_REGISTRY.reload()
+    except Exception:
+        pass
+    new_theme = get_theme(slug)
+    render_info(f"theme → {new_theme.get('name', slug)}", new_theme)
     return new_theme
+
+
+def cmd_lang(arg: str, config: dict, theme: dict):
+    """Switch interface language (en/fa/zh) and persist to config."""
+    from .i18n import SUPPORTED_LANGUAGES, set_language, t
+    code = (arg or "").lower().strip()
+    if not code:
+        render_info(f"language: {config.get('language', 'en')}  (available: {', '.join(SUPPORTED_LANGUAGES)})", theme)
+        return
+    if code not in SUPPORTED_LANGUAGES:
+        render_error(f"unknown language: {arg}  (try: {', '.join(SUPPORTED_LANGUAGES)})", theme)
+        return
+    config["language"] = code
+    set_language(code)
+    try:
+        save_config(config)
+    except Exception:
+        pass
+    render_info(t("goodbye_bye") + f"  [{code}]", theme)
 
 
 def cmd_keys(engine: ChatEngine, arg: str, config: dict, theme: dict):
@@ -808,6 +831,8 @@ def handle_command(engine: ChatEngine, line: str, config: dict, theme: dict) -> 
             cmd_tokens(engine, theme)
         case "theme":
             new_theme = cmd_theme(arg, config, theme)
+        case "lang":
+            cmd_lang(arg, config, theme)
         case "config":
             cmd_config(config, theme)
         case None:

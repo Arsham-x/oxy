@@ -203,6 +203,12 @@ class ChatEngine:
     def set_model(self, model: str):
         self.config["model"] = model
 
+    def set_theme(self, name: str):
+        """Apply a theme to this engine (registry-loaded, validated, complete)."""
+        from .render import get_theme
+        self.config["theme"] = name.lower().strip()
+        self._theme = get_theme(self.config["theme"])
+
     def set_system(self, prompt: str):
         self.system_prompt = prompt
         self.refresh_system_prompt()

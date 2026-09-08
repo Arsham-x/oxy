@@ -35,9 +35,10 @@ try:
 except Exception:  # commands imports prompt_toolkit-free deps only; fallback is defensive
     SLASH_COMMANDS = [
         "/help", "/clear", "/compact", "/quit", "/tools", "/permissions",
-        "/skills", "/add", "/drop", "/files", "/git", "/memory", "/agent",
-        "/model", "/system", "/keys", "/sessions", "/resume", "/history",
-        "/save", "/copy", "/tokens", "/theme", "/config",
+        "/skills", "/jobs", "/mcp", "/add", "/drop", "/files", "/git",
+        "/memory", "/agent", "/model", "/system", "/keys", "/sessions",
+        "/resume", "/rewind", "/undo", "/history", "/save", "/copy",
+        "/tokens", "/theme", "/lang", "/config",
     ]
 
 
@@ -100,6 +101,10 @@ def make_toolbar(
     Layout: model │ turns │ tokens │ timer │ mode │ files │ /help
     """
     def _toolbar():
+        try:
+            from .i18n import t as _t
+        except Exception:
+            _t = lambda k, **kw: k  # noqa: E731 — defensive fallback
         elapsed = datetime.now() - start_time
         mins = int(elapsed.total_seconds()) // 60
         secs = int(elapsed.total_seconds()) % 60
@@ -107,27 +112,27 @@ def make_toolbar(
 
         parts = [
             f" <b>{safe_model}</b>",
-            f"{msg_count} turns",
-            f"{token_total:,} tok",
+            f"{msg_count} {_t('turns')}",
+            f"{token_total:,} {_t('tok')}",
             f"{mins}:{secs:02d}",
         ]
 
         # Mode indicator
         if permission_mode == "auto":
-            parts.append("<style bg='#1a3a1a' fg='#44cc44'>auto</style>")
+            parts.append(f"<style bg='#1a3a1a' fg='#44cc44'>{_t('auto')}</style>")
         else:
-            parts.append("ask")
+            parts.append(_t("ask"))
 
         if active_files_count > 0:
-            parts.append(f"{active_files_count} files")
+            parts.append(f"{active_files_count} {_t('files')}")
 
         if memory_count > 0:
-            parts.append(f"{memory_count} mem")
+            parts.append(f"{memory_count} {_t('mem')}")
 
         if rr_active:
-            parts.append("⟳ rr")
+            parts.append(f"⟳ {_t('rr')}")
 
-        parts.append("<i>/help</i>")
+        parts.append(f"<i>{_t('help_shortcut')}</i>")
         return HTML("  │  ".join(parts))
 
     return _toolbar

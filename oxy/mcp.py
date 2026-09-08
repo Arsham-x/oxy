@@ -10,8 +10,7 @@ from __future__ import annotations
 import json
 import subprocess
 import threading
-from typing import Any, Callable
-from pathlib import Path
+from typing import Any
 
 
 class MCPClient:

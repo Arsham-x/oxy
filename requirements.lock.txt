@@ -1,0 +1,10 @@
+# OXY pinned dependency lockfile — generated 2026-09-08, Python 3.12.3, linux.
+# Runtime (mirrors pyproject.toml lower bounds):
+openai==2.24.0
+rich==14.3.3
+prompt_toolkit==3.0.52
+arabic-reshaper==3.0.1
+python-bidi==0.6.10
+# Dev / test extras:
+pytest==7.4.4
+pyflakes==3.2.0

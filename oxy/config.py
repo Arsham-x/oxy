@@ -57,8 +57,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # Permissions
     "permission_mode":      "ask",  # ask | auto
 
-    # UI
+    # UI & Localization
     "theme":                "minimal",  # minimal | cyber | aurora
+    "language":             "en",       # en | fa | zh
 }
 
 
@@ -89,6 +90,15 @@ def load_config(path: str | None = None) -> dict[str, Any]:
 
     if env_theme := os.environ.get("OXY_THEME"):
         config["theme"] = env_theme
+
+    if env_lang := os.environ.get("OXY_LANG"):
+        config["language"] = env_lang
+
+    try:
+        from .i18n import set_language
+        set_language(config.get("language", "en"))
+    except Exception:
+        pass
 
     return config
 
@@ -153,9 +163,19 @@ def validate_config(config: dict[str, Any]) -> list[str]:
     if config["round_robin"] and not config.get("round_robin_keys"):
         warnings.append("Round-robin enabled but no keys configured")
 
-    if config["theme"] not in ("minimal", "cyber", "aurora"):
-        warnings.append(f"Unknown theme '{config['theme']}', falling back to 'minimal'")
+    try:
+        from .themes import THEME_REGISTRY
+        THEME_REGISTRY.reload()
+        available = THEME_REGISTRY.list_names()
+    except Exception:
+        available = ["minimal", "cyber", "aurora"]
+    if config.get("theme") not in available:
+        warnings.append(f"Unknown theme '{config.get('theme')}', falling back to 'minimal'")
         config["theme"] = "minimal"
+
+    if config.get("language") not in ("en", "fa", "zh"):
+        warnings.append(f"Unknown language '{config.get('language')}', falling back to 'en'")
+        config["language"] = "en"
 
     if config["round_robin_strategy"] not in ("sequential", "random", "least-used"):
         warnings.append(f"Unknown strategy '{config['round_robin_strategy']}', using 'sequential'")

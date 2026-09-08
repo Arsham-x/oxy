@@ -1,0 +1,12 @@
+include README.md
+include LICENSE
+include requirements.txt
+include requirements.lock.txt
+include oxy_config.example.json
+include system_prompt.md
+recursive-include docs *.md
+recursive-include tests *.py
+recursive-exclude * __pycache__
+recursive-exclude * *.py[cod]
+recursive-exclude .oxy *
+recursive-exclude .pytest_cache *

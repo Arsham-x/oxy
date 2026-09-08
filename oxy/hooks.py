@@ -70,7 +70,7 @@ class HookRegistry:
                     modified.update(res)
                 elif res is False:
                     return HookResult(allow=False, modified_data=modified, error=f"Blocked by hook {cb.__name__}")
-            except Exception as e:
+            except Exception:
                 # Never crash the agent on hook failure
                 pass
 

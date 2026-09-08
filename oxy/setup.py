@@ -14,20 +14,15 @@ from __future__ import annotations
 import os
 import sys
 import time
-from pathlib import Path
 from typing import Any
 
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 from rich import box
 
 from .config import DEFAULT_CONFIG, CONFIG_FILE, save_config
-from .render import get_theme, _mask_key
-from .ui import select_menu, render_stepper, render_cockpit_header, p
-
-console = Console()
+from .render import console, get_theme, _mask_key
+from .ui import select_menu, render_stepper, render_cockpit_header
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -247,11 +242,27 @@ PROVIDERS = [
     },
 ]
 
-THEMES_INFO = [
-    ("cyber",   "Cyber",    "Electric cyan & neon green matrix style"),
-    ("aurora",  "Aurora",   "Northern lights violet & emerald gradients"),
-    ("minimal", "Minimal",  "Clean monochrome for focused terminal setups"),
-]
+def _build_themes_info():
+    """Build theme options from registry: builtins first, then user custom themes."""
+    builtin_info = [
+        ("cyber",   "Cyber",    "Electric cyan & neon green matrix style"),
+        ("aurora",  "Aurora",   "Northern lights violet & emerald gradients"),
+        ("minimal", "Minimal",  "Clean monochrome for focused terminal setups"),
+    ]
+    try:
+        from .render import THEME_REGISTRY, list_themes
+        THEME_REGISTRY.reload()
+        builtin_slugs = {slug for slug, _, _ in builtin_info}
+        for slug in list_themes():
+            if slug not in builtin_slugs:
+                theme = THEME_REGISTRY.get(slug)
+                builtin_info.append((slug, theme.get("name", slug).title(), "Custom user theme"))
+    except Exception:
+        pass
+    return builtin_info
+
+
+THEMES_INFO = _build_themes_info()
 
 PERMISSION_OPTIONS = [
     ("ask",  "Interactive (Recommended)", "Confirm file mutations and bash command execution"),
@@ -354,6 +365,12 @@ def setup_wizard() -> dict[str, Any]:
     )
 
     lang_code = ["en", "fa", "zh"][lang_idx]
+    config["language"] = lang_code
+    try:
+        from .i18n import set_language
+        set_language(lang_code)
+    except Exception:
+        pass
     s = LANG[lang_code]
 
     if lang_code == "fa":
@@ -415,7 +432,7 @@ def setup_wizard() -> dict[str, Any]:
 
     if provider["name"].startswith("Local"):
         config["api_key"] = "not-needed"
-        console.print(f"  [bold green]✔[/] [dim]Local provider selected — no authentication key required.[/]\n")
+        console.print("  [bold green]✔[/] [dim]Local provider selected — no authentication key required.[/]\n")
     elif found_env_val:
         masked_env = found_env_val[:4] + "..." + found_env_val[-4:] if len(found_env_val) > 8 else "****"
         console.print(f"  [bold green]✔[/] [dim]Detected {env_var_to_check}:[/] [bold cyan]{masked_env}[/]")
@@ -503,6 +520,6 @@ def setup_wizard() -> dict[str, Any]:
         padding=(0, 1),
     ))
     console.print()
-    console.print(f"  [dim]Run[/] [bold cyan]python3 oxy.py[/] [dim]to start[/]\n")
+    console.print("  [dim]Run[/] [bold cyan]python3 oxy.py[/] [dim]to start[/]\n")
 
     return config

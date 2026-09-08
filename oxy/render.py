@@ -11,111 +11,44 @@ Inspired by Grok Build's production-quality terminal interface:
 
 from __future__ import annotations
 
-import time
-import os
 from typing import Any
 from pathlib import Path
 
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.text import Text
 from rich.table import Table
-from rich.live import Live
 from rich.spinner import Spinner
 from rich.rule import Rule
 from rich.syntax import Syntax
 from rich.columns import Columns
 from rich import box
 
+from .themes import THEME_REGISTRY
+
 console = Console()
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  Theme definitions
+#  Theme definitions & Registry
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-THEMES: dict[str, dict[str, Any]] = {
-    "minimal": {
-        "name":           "Minimal",
-        "user_style":     "bold",
-        "ai_title":       "[dim]oxy[/]",
-        "ai_border":      "dim",
-        "ai_box":         box.SIMPLE,
-        "system_style":   "dim italic",
-        "error_style":    "red",
-        "dim":            "dim",
-        "accent":         "blue",
-        "success":        "green",
-        "warning":        "yellow",
-        "spinner":        "dots",
-        "spinner_style":  "dim",
-        "prompt_char":    "❯",
-        "prompt_style":   "dim",
-        "toolbar_bg":     "#1a1a1a",
-        "toolbar_fg":     "#888888",
-        "welcome_border": "dim",
-        "welcome_box":    box.SIMPLE,
-        "rule_style":     "dim",
-        "sub_agent":      "dim italic",
-        "tool_icon":      "●",
-        "think_icon":     "◆",
-    },
-    "cyber": {
-        "name":           "Cyber",
-        "user_style":     "bold cyan",
-        "ai_title":       "[bold green]⟫ OXY[/]",
-        "ai_border":      "green",
-        "ai_box":         box.DOUBLE,
-        "system_style":   "bold yellow",
-        "error_style":    "bold red",
-        "dim":            "bright_black",
-        "accent":         "cyan",
-        "success":        "green",
-        "warning":        "yellow",
-        "spinner":        "dots12",
-        "spinner_style":  "cyan",
-        "prompt_char":    "❯",
-        "prompt_style":   "bold cyan",
-        "toolbar_bg":     "#0a0a2e",
-        "toolbar_fg":     "#00ff88",
-        "welcome_border": "cyan",
-        "welcome_box":    box.DOUBLE,
-        "rule_style":     "cyan",
-        "sub_agent":      "bold magenta",
-        "tool_icon":      "●",
-        "think_icon":     "◆",
-    },
-    "aurora": {
-        "name":           "Aurora",
-        "user_style":     "bold #e0b0ff",
-        "ai_title":       "[bold #7fdbca]✦ oxy[/]",
-        "ai_border":      "#7fdbca",
-        "ai_box":         box.ROUNDED,
-        "system_style":   "#f0c674",
-        "error_style":    "#ff6b6b",
-        "dim":            "#666680",
-        "accent":         "#c792ea",
-        "success":        "#7fdbca",
-        "warning":        "#f0c674",
-        "spinner":        "moon",
-        "spinner_style":  "#7fdbca",
-        "prompt_char":    "❯",
-        "prompt_style":   "#c792ea",
-        "toolbar_bg":     "#1e1e3f",
-        "toolbar_fg":     "#7fdbca",
-        "welcome_border": "#c792ea",
-        "welcome_box":    box.ROUNDED,
-        "rule_style":     "#7fdbca",
-        "sub_agent":      "italic #c792ea",
-        "tool_icon":      "●",
-        "think_icon":     "◆",
-    },
-}
+THEMES: dict[str, dict[str, Any]] = THEME_REGISTRY.themes
 
 
 def get_theme(name: str) -> dict[str, Any]:
-    return THEMES.get(name, THEMES["minimal"])
+    """Retrieve theme by name from registry, falling back to minimal."""
+    return THEME_REGISTRY.get(name)
+
+
+def list_themes() -> list[str]:
+    """List all available theme names (built-in + user custom)."""
+    return THEME_REGISTRY.list_names()
+
+
+def register_theme(name: str, theme_dict: dict[str, Any]):
+    """Register a custom theme at runtime."""
+    THEME_REGISTRY.register(name, theme_dict)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -223,13 +156,14 @@ def print_welcome(config: dict[str, Any], theme: dict[str, Any], engine: Any = N
     console.print(Columns([p1, p2], equal=True))
 
     # ── Hint bar ──
-    console.print(
-        f"  [{dim}]Enter[/] send   "
-        f"[{dim}]Alt+Enter[/] newline   "
-        f"[{dim}]Ctrl+C[/] cancel   "
-        f"[{dim}]/help[/] commands   "
-        f"[{dim}]/tools[/] {tool_count} tools"
-    )
+    try:
+        from .i18n import t as _t
+        hint_bar = _t("welcome_hint")
+        hint_suffix = f" · /tools {tool_count} {_t('files')}"
+    except Exception:
+        hint_bar = "Enter send · Alt+Enter newline · Ctrl+C cancel · /help commands"
+        hint_suffix = f" · /tools {tool_count} tools"
+    console.print(f"  [{dim}]{hint_bar}{hint_suffix}[/]")
     console.print()
 
 
@@ -320,14 +254,19 @@ def render_tool_result(name: str, success: bool, summary: str, theme: dict[str, 
     console.print(f"  {icon} [{style}]{name}[/] [{dim}]· {summary}[/]{ms_tag}")
 
 
+YES_WORDS = ("y", "yes", "بله", "آره", "是", "好", "对", "嗯")
+ALWAYS_WORDS = ("a", "always", "همیشه", "总是", "永远")
+
+
 def ask_permission(tool_name: str, summary: str, theme: dict[str, Any]) -> str:
     """Ask interactive user permission for tool execution."""
+    from .i18n import t as _t
     console.print()
     border = theme.get("warning", "yellow")
     prompt_text = (
-        f"[bold {border}]Allow this action?[/]\n"
+        f"[bold {border}]{_t('allow_action')}[/]\n"
         f"  [{theme.get('accent', 'cyan')}]{tool_name}[/] · {summary}\n\n"
-        f"  [green]y[/]es  [red]n[/]o  [yellow]a[/]lways"
+        f"  {_t('yes_once')}  {_t('no')}  {_t('yes_always')}"
     )
     console.print(Panel(
         prompt_text,
@@ -342,9 +281,9 @@ def ask_permission(tool_name: str, summary: str, theme: dict[str, Any]) -> str:
         console.print()
         return "no"
 
-    if choice in ("y", "yes", "بله", "آره"):
+    if choice in YES_WORDS:
         return "yes"
-    if choice in ("a", "always", "همیشه"):
+    if choice in ALWAYS_WORDS:
         return "always"
     return "no"
 
@@ -360,7 +299,7 @@ def ask_yes_no(prompt_text: str, theme: dict[str, Any], default_yes: bool = True
         return default_yes
     if not choice:
         return default_yes
-    return choice in ("y", "yes", "بله", "آره")
+    return choice in YES_WORDS
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -450,14 +389,19 @@ def render_error_panel(message: str, theme: dict[str, Any]):
 
 def print_goodbye(msg_count: int, token_total: int, elapsed_secs: float, theme: dict[str, Any]):
     """Print goodbye with session stats."""
+    from .i18n import t as _t
     mins = int(elapsed_secs) // 60
     secs = int(elapsed_secs) % 60
     d = theme["dim"]
 
+    turns_lbl = _t("turns")
+    tok_lbl = _t("tok")
+    bye_lbl = _t("goodbye_bye")
+
     console.print()
     console.print(Rule(style=theme["rule_style"]))
-    console.print(f"  [{d}]{msg_count} turns  ·  {token_total:,} tokens  ·  {mins}:{secs:02d}[/]")
-    console.print(f"  [{d}]goodbye[/]")
+    console.print(f"  [{d}]{msg_count} {turns_lbl}  ·  {token_total:,} {tok_lbl}  ·  {mins}:{secs:02d}[/]")
+    console.print(f"  [{d}]{bye_lbl}[/]")
     console.print()
 
 

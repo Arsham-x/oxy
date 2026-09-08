@@ -12,28 +12,19 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Any
-
-from rich.markup import escape as safe_markup
 
 
 def supports_raw() -> bool:
     """Return True if the current runtime supports in-place raw terminal control."""
     if not sys.stdin.isatty():
         return False
+    import importlib.util
     if os.name == "nt":
-        try:
-            import msvcrt  # noqa: F401
-            return True
-        except ImportError:
-            return False
-    else:
-        try:
-            import termios  # noqa: F401
-            import tty  # noqa: F401
-            return True
-        except ImportError:
-            return False
+        return importlib.util.find_spec("msvcrt") is not None
+    return (
+        importlib.util.find_spec("termios") is not None
+        and importlib.util.find_spec("tty") is not None
+    )
 
 
 def flush_input():

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import difflib
 import fnmatch
-import json
 import os
 import re
 import subprocess
@@ -48,6 +47,14 @@ MAX_OUTPUT_LINES = 250
 MAX_OUTPUT_CHARS = 25_000
 DEFAULT_BASH_TIMEOUT = 60
 TOOL_RESULTS_DIR = Path.home() / ".oxy" / "tool-results"
+
+# Shared guardrail against catastrophic system deletion (used by bash and bash_background)
+DANGEROUS_PATTERNS = [
+    r"\brm\s+-[a-zA-Z]*rf\s+/\s*$",
+    r"\brm\s+-[a-zA-Z]*rf\s+~\s*$",
+    r"\brm\s+-[a-zA-Z]*rf\s+/\*",
+    r"\b(mkfs|dd\s+if=.*of=/dev/)",
+]
 
 
 def spill_large_output(text: str, label: str = "output") -> str:
@@ -246,13 +253,7 @@ def bash(command: str, timeout: int = DEFAULT_BASH_TIMEOUT) -> ToolResult:
         return ToolResult(False, "Error: empty command.")
 
     # Guardrail against catastrophic system deletion
-    dangerous_patterns = [
-        r"\brm\s+-[a-zA-Z]*rf\s+/\s*$",
-        r"\brm\s+-[a-zA-Z]*rf\s+~\s*$",
-        r"\brm\s+-[a-zA-Z]*rf\s+/\*",
-        r"\b(mkfs|dd\s+if=.*of=/dev/)",
-    ]
-    for pat in dangerous_patterns:
+    for pat in DANGEROUS_PATTERNS:
         if re.search(pat, cmd_clean):
             return ToolResult(False, "Safety Block: Catastrophic command detected and blocked by OXY guardrails.")
 
@@ -317,13 +318,7 @@ def bash_background(command: str, timeout: int = 300) -> ToolResult:
     if not cmd_clean:
         return ToolResult(False, "Error: empty command.")
 
-    dangerous_patterns = [
-        r"\brm\s+-[a-zA-Z]*rf\s+/\s*$",
-        r"\brm\s+-[a-zA-Z]*rf\s+~\s*$",
-        r"\brm\s+-[a-zA-Z]*rf\s+/\*",
-        r"\b(mkfs|dd\s+if=.*of=/dev/)",
-    ]
-    for pat in dangerous_patterns:
+    for pat in DANGEROUS_PATTERNS:
         if re.search(pat, cmd_clean):
             return ToolResult(False, "Safety Block: Catastrophic command detected and blocked by OXY guardrails.")
 

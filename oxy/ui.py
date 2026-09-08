@@ -17,13 +17,10 @@ import shutil
 import time
 from typing import Any
 
-from rich.console import Console
-from rich.panel import Panel
-from rich.text import Text
 from rich.cells import cell_len
-from rich import box
 
 from .compat import supports_raw, flush_input, read_key, fallback_select
+from .render import console
 
 try:
     import arabic_reshaper
@@ -31,8 +28,6 @@ try:
     HAS_BIDI = True
 except ImportError:
     HAS_BIDI = False
-
-console = Console()
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -178,7 +173,6 @@ def select_menu(
     fd = sys.stdin.fileno()
     old_term = None
     if os.name != "nt":
-        import tty
         import termios
         old_term = termios.tcgetattr(fd)
 

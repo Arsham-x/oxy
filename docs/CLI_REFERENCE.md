@@ -18,7 +18,8 @@ python3 oxy.py [OPTIONS]
 | `--yolo` | None | Auto-approve all tool actions (**Hardline Security Floor remains fully active**). |
 | `--permission-mode` | `ask` \| `auto` | Set tool authorization behavior (`ask` prompts on mutating actions, `auto` executes automatically). |
 | `-m`, `--model` | `<name>` | Override the model identifier for the active session (e.g., `-m deepseek-reasoner`). |
-| `--theme` | `cyber` \| `aurora` \| `minimal` | Override terminal theme. |
+| `--theme` | `cyber` \| `aurora` \| `minimal` \| `<name>` | Override terminal theme (built-ins or user custom). |
+| `--lang` | `en` \| `fa` \| `zh` | Override interface language (English, Persian, Chinese). |
 | `-c`, `--config` | `<path>` | Path to a custom JSON configuration file. |
 | `-h`, `--help` | None | Show argument summary and exit. |
 
@@ -103,7 +104,8 @@ All slash commands support **Tab Autocompletion**.
 | :--- | :--- | :--- | :--- |
 | `/tokens` | — | None | Display prompt, completion, and total token usage counters. |
 | `/copy` | — | None | Copy the last assistant response directly to system clipboard. |
-| `/theme` | — | `[name]` | Switch visual theme (`cyber`, `aurora`, `minimal`). |
+| `/theme` | — | `[name\|list]` | Switch visual theme (`cyber`, `aurora`, `minimal`), or list all installed built-in and custom themes (`/theme list`). |
+| `/lang` | `/language` | `[code]` | View current interface language or dynamically switch between `en` (English), `fa` (فارسی), and `zh` (简体中文). |
 | `/config` | — | None | Display active configuration parameters (API keys masked). |
 
 ---
