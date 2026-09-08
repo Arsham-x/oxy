@@ -26,58 +26,92 @@ from .skills import SkillManager
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  /help
+#  Command Registry — single source of truth for all slash commands
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)
+class Command:
+    """Declarative slash-command definition driving dispatch, help, completion."""
+    name: str
+    handler: str
+    description: str
+    usage: str = ""
+    aliases: tuple[str, ...] = ()
+    group: str = "General"
+    needs_arg: bool = False
+
+
+COMMANDS: tuple[Command, ...] = (
+    # Core
+    Command("/help",        "help",        "show this help reference",   aliases=("/h", "/?"),      group="Core"),
+    Command("/clear",       "clear",       "clear conversation history",                            group="Core"),
+    Command("/compact",     "compact",     "manually compact context window",                       group="Core"),
+    Command("/quit",        "quit",        "exit OXY",                   aliases=("/exit", "/q"),    group="Core"),
+    # Tools & Permissions
+    Command("/tools",       "tools",       "list all agent tools and safety status",                group="Tools & Permissions"),
+    Command("/permissions", "permissions", "view or toggle permission mode",    usage="[ask|auto]", aliases=("/permission",), group="Tools & Permissions"),
+    Command("/skills",      "skills",      "list installed skills or view skill instructions", usage="[name]", aliases=("/skill",), group="Tools & Permissions"),
+    # Codebase & Files (Aider-style)
+    Command("/add",         "add",         "add file to active chat context",   usage="<file>",  needs_arg=True, group="Codebase & Files"),
+    Command("/drop",        "drop",        "drop file from active chat context", usage="<file>", needs_arg=True, group="Codebase & Files"),
+    Command("/files",       "files",       "list active files and project tree",                   group="Codebase & Files"),
+    Command("/git",         "git",         "show git status, branch, and changes",                  group="Codebase & Files"),
+    # Memory (Claude Code-style)
+    Command("/memory",      "memory",      "list all persistent memories",                          group="Memory"),
+    # Agent & Model
+    Command("/agent",       "agent",       "run sub-agent (architect/debugger/reviewer)", usage="[role] <task>", group="Agent & Model"),
+    Command("/model",       "model",       "view or switch AI model",             usage="[name]",  group="Agent & Model"),
+    Command("/system",      "system",      "view, set, or edit system prompt",  usage="[text|edit|reload]", group="Agent & Model"),
+    Command("/keys",        "keys",        "manage round-robin API keys",                           group="Agent & Model"),
+    # Session & Durability
+    Command("/sessions",    "sessions",    "list saved session transaction ledgers",                 group="Session & Durability"),
+    Command("/resume",      "resume",      "resume past session from disk",       usage="<id>", needs_arg=True, group="Session & Durability"),
+    Command("/history",     "history",     "show conversation history turns",                       group="Session & Durability"),
+    Command("/save",        "save",        "export conversation to markdown",     usage="[file]",  group="Session & Durability"),
+    Command("/copy",        "copy",        "copy last AI response to clipboard",                    group="Session & Durability"),
+    Command("/tokens",      "tokens",      "show token usage summary",                              group="Session & Durability"),
+    Command("/theme",       "theme",       "switch theme (minimal/cyber/aurora)", usage="[name]",  group="Session & Durability"),
+    Command("/config",      "config",      "view current configuration",                            group="Session & Durability"),
+)
+
+_COMMAND_BY_NAME: dict[str, Command] = {}
+for _c in COMMANDS:
+    _COMMAND_BY_NAME[_c.name] = _c
+    for _a in _c.aliases:
+        _COMMAND_BY_NAME[_a] = _c
+
+# Canonical names for tab-completion (aliases excluded to avoid duplicates)
+SLASH_COMMANDS: list[str] = [c.name for c in COMMANDS]
+
+
+def get_command(name: str) -> Command | None:
+    """Look up a command by name or alias (case-insensitive)."""
+    return _COMMAND_BY_NAME.get(name.lower())
+
 
 def cmd_help(theme: dict):
     t = Table(box=box.SIMPLE_HEAVY, show_edge=False)
     t.add_column("command", style=theme["accent"], no_wrap=True)
     t.add_column("description")
 
-    rows = [
-        # Core
-        ("/help",                  "show this help reference"),
-        ("/clear",                 "clear conversation history"),
-        ("/quit",                  "exit OXY"),
-        ("", ""),
-        # Tools & Permissions
-        ("/tools",                 "list all 10 agent tools and safety status"),
-        ("/permissions [ask|auto]","view or toggle permission mode"),
-        ("/skills [name]",         "list installed skills or view skill instructions"),
-        ("", ""),
-        # Codebase & Files (Aider-style)
-        ("/add <file>",            "add file to active chat context"),
-        ("/drop <file>",           "drop file from active chat context"),
-        ("/files",                 "list active files and project tree"),
-        ("/git",                   "show git status, branch, and changes"),
-        ("", ""),
-        # Memory (Claude Code-style)
-        ("/memory",                "list all persistent memories"),
-        ("/memory view <slug>",    "view detailed memory contents"),
-        ("/memory clear",          "clear all stored memories"),
-        ("", ""),
-        # Agent & Model
-        ("/agent [role] <task>",   "run sub-agent (architect/debugger/reviewer)"),
-        ("/model [name]",          "view or switch AI model"),
-        ("/system [text|edit]",    "view, set, or edit system prompt"),
-        ("/keys",                  "manage round-robin API keys"),
-        ("", ""),
-        # Session & Durability
-        ("/sessions",              "list saved session transaction ledgers"),
-        ("/resume <id>",           "resume past session from disk"),
-        ("/history",               "show conversation history turns"),
-        ("/save [file]",           "export conversation to markdown"),
-        ("/copy",                  "copy last AI response to clipboard"),
-        ("/tokens",                "show token usage summary"),
-        ("/theme [name]",          "switch theme (minimal/cyber/aurora)"),
-        ("/config",                "view current configuration"),
-        ("", ""),
-        ("[dim]enter[/]",          "[dim]send message[/]"),
-        ("[dim]alt+enter[/]",      "[dim]new line[/]"),
-        ("[dim]ctrl+c[/]",         "[dim]cancel generation / tool[/]"),
-        ("[dim]↑ / ↓[/]",         "[dim]browse input history[/]"),
-    ]
-    for cmd, desc in rows:
+    last_group = ""
+    for c in COMMANDS:
+        if c.group != last_group:
+            if last_group:
+                t.add_row("", "")
+            last_group = c.group
+        label = c.name + (f" {c.usage}" if c.usage else "")
+        t.add_row(label, c.description)
+
+    t.add_row("", "")
+    t.add_row("[dim]enter[/]", "[dim]send message[/]")
+    t.add_row("[dim]alt+enter[/]", "[dim]new line[/]")
+    t.add_row("[dim]ctrl+c[/]", "[dim]cancel generation / tool[/]")
+    t.add_row("[dim]↑ / ↓[/]", "[dim]browse input history[/]")
+    for cmd, desc in []:
         t.add_row(cmd, desc)
 
     console.print(t)
@@ -143,6 +177,7 @@ def cmd_add(engine: ChatEngine, arg: str, theme: dict):
         return
     ok, msg = engine.repo.add_file(arg)
     if ok:
+        engine.refresh_system_prompt()
         render_info(f"✓ {msg}", theme)
     else:
         render_error(msg, theme)
@@ -154,6 +189,7 @@ def cmd_drop(engine: ChatEngine, arg: str, theme: dict):
         return
     ok, msg = engine.repo.drop_file(arg)
     if ok:
+        engine.refresh_system_prompt()
         render_info(f"✓ {msg}", theme)
     else:
         render_error(msg, theme)
@@ -190,13 +226,15 @@ def cmd_git(engine: ChatEngine, theme: dict):
 #  /memory
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def cmd_memory(arg: str, theme: dict):
+def cmd_memory(engine: ChatEngine | None, arg: str, theme: dict):
     parts = arg.split(maxsplit=1)
     sub = parts[0].lower() if parts else ""
     sub_arg = parts[1].strip() if len(parts) > 1 else ""
 
     if sub == "clear":
         clear_all_memories()
+        if engine is not None:
+            engine.refresh_system_prompt()
         render_info("all persistent memories cleared", theme)
         return
 
@@ -264,6 +302,14 @@ def cmd_agent(engine: ChatEngine, arg: str, config: dict, theme: dict):
             current = config.get("sub_agent_model") or config["model"]
             render_info(f"sub-agent model: {current}", theme)
         return
+    elif first == "iterations":
+        if rest and rest.isdigit():
+            config["sub_agent_max_iterations"] = int(rest)
+            render_info(f"sub-agent max iterations → {rest}", theme)
+        else:
+            current = config.get("sub_agent_max_iterations", 6)
+            render_info(f"sub-agent max iterations: {current}", theme)
+        return
 
     # Persona check
     persona = "general"
@@ -296,6 +342,9 @@ def _show_agent_status(config: dict, theme: dict):
     t.add_row("status", "enabled" if enabled else "disabled")
     t.add_row("model", model)
     t.add_row("max tokens", str(max_tok))
+    t.add_row("max iterations", str(config.get("sub_agent_max_iterations", 6)))
+    from .engine import SubAgent as _SA
+    t.add_row("tools", ", ".join(sorted(_SA.DEFAULT_ALLOWED_TOOLS)))
     console.print(t)
     console.print()
 
@@ -601,61 +650,72 @@ def cmd_resume(engine: ChatEngine, session_id: str, theme: dict):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def handle_command(engine: ChatEngine, line: str, config: dict, theme: dict) -> tuple[bool, dict | None]:
-    """Dispatch slash commands. Returns (continue_running, new_theme_or_none)."""
+    """Dispatch slash commands driven by COMMANDS registry. Returns (continue_running, new_theme_or_none)."""
     parts = line.split(maxsplit=1)
     cmd = parts[0].lower()
     arg = parts[1].strip() if len(parts) > 1 else ""
 
     new_theme = None
+    cmd_obj = get_command(cmd)
 
-    match cmd:
-        case "/quit" | "/exit" | "/q":
+    if cmd_obj and cmd_obj.needs_arg and not arg:
+        render_error(f"usage: {cmd_obj.name} {cmd_obj.usage}", theme)
+        return (True, None)
+
+    match cmd_obj.handler if cmd_obj else None:
+        case "quit":
             return (False, None)
-        case "/help" | "/h" | "/?":
+        case "help":
             cmd_help(theme)
-        case "/tools":
-            cmd_tools(engine, theme)
-        case "/permissions" | "/permission":
-            cmd_permissions(engine, arg, theme)
-        case "/skills" | "/skill":
-            cmd_skills(engine, arg, theme)
-        case "/sessions":
-            cmd_sessions(engine, arg, theme)
-        case "/resume":
-            cmd_resume(engine, arg, theme)
-        case "/add":
-            cmd_add(engine, arg, theme)
-        case "/drop":
-            cmd_drop(engine, arg, theme)
-        case "/files":
-            cmd_files(engine, theme)
-        case "/git":
-            cmd_git(engine, theme)
-        case "/memory":
-            cmd_memory(arg, theme)
-        case "/clear":
+        case "clear":
             cmd_clear(engine, theme)
-        case "/system":
-            cmd_system(engine, arg, theme)
-        case "/model":
-            cmd_model(engine, arg, theme)
-        case "/history":
-            cmd_history(engine, theme)
-        case "/save":
-            cmd_save(engine, arg, theme)
-        case "/config":
-            cmd_config(config, theme)
-        case "/tokens":
-            cmd_tokens(engine, theme)
-        case "/copy":
-            cmd_copy(engine, theme)
-        case "/theme":
-            new_theme = cmd_theme(arg, config, theme)
-        case "/keys":
-            cmd_keys(engine, arg, config, theme)
-        case "/agent":
+        case "compact":
+            removed = engine.compact_now()
+            if removed > 0:
+                render_info(f"compacted context ({removed} messages consolidated)", theme)
+            else:
+                render_info("context is already lean (fewer than 8 turns)", theme)
+        case "tools":
+            cmd_tools(engine, theme)
+        case "permissions":
+            cmd_permissions(engine, arg, theme)
+        case "skills":
+            cmd_skills(engine, arg, theme)
+        case "add":
+            cmd_add(engine, arg, theme)
+        case "drop":
+            cmd_drop(engine, arg, theme)
+        case "files":
+            cmd_files(engine, theme)
+        case "git":
+            cmd_git(engine, theme)
+        case "memory":
+            cmd_memory(engine, arg, theme)
+        case "agent":
             cmd_agent(engine, arg, config, theme)
-        case _:
+        case "model":
+            cmd_model(engine, arg, theme)
+        case "system":
+            cmd_system(engine, arg, theme)
+        case "keys":
+            cmd_keys(engine, arg, config, theme)
+        case "sessions":
+            cmd_sessions(engine, arg, theme)
+        case "resume":
+            cmd_resume(engine, arg, theme)
+        case "history":
+            cmd_history(engine, theme)
+        case "save":
+            cmd_save(engine, arg, theme)
+        case "copy":
+            cmd_copy(engine, theme)
+        case "tokens":
+            cmd_tokens(engine, theme)
+        case "theme":
+            new_theme = cmd_theme(arg, config, theme)
+        case "config":
+            cmd_config(config, theme)
+        case None:
             # Check if cmd is a direct invocation of an installed procedural skill (e.g. /review, /test)
             skill = getattr(engine, "skills", None) and engine.skills.get_skill(cmd.lstrip("/"))
             if skill:

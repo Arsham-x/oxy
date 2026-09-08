@@ -237,23 +237,24 @@ def print_welcome(config: dict[str, Any], theme: dict[str, Any], engine: Any = N
 #  AI response rendering
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def render_ai_response(text: str, theme: dict[str, Any], turn_time: float | None = None):
-    """Render an AI response with markdown inside a themed panel."""
+def make_ai_response_panel(text: str, theme: dict[str, Any]) -> Panel:
+    """Create a styled Panel for AI markdown response."""
     from .ui import reshape_markdown
     formatted_text = reshape_markdown(text)
     md = Markdown(formatted_text)
-
-    # Build title with optional turn timing
-    title = theme["ai_title"]
-
-    console.print(Panel(
+    return Panel(
         md,
-        title=title,
+        title=theme["ai_title"],
         title_align="left",
         border_style=theme["ai_border"],
         box=theme["ai_box"],
         padding=(0, 1),
-    ))
+    )
+
+
+def render_ai_response(text: str, theme: dict[str, Any], turn_time: float | None = None):
+    """Render an AI response with markdown inside a themed panel."""
+    console.print(make_ai_response_panel(text, theme))
 
     # Turn metadata badge (Grok Build style)
     if turn_time is not None:

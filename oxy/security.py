@@ -89,6 +89,7 @@ KNOWN_TOOLS = {
     "bash",
     "file_search",
     "content_search",
+    "list_dir",
     "git_status",
     "save_memory",
     "recall_memory",
@@ -190,7 +191,7 @@ class SecurityGate:
             return cls.check_file_path(path, operation="read")
 
         # Known safe tools that require no further checks
-        elif tool_name in ("file_search", "content_search", "git_status", "save_memory", "recall_memory", "load_skill"):
+        elif tool_name in ("list_dir", "file_search", "content_search", "git_status", "save_memory", "recall_memory", "load_skill"):
             return SecurityDecision(SecurityVerdict.ALLOWED, "Tool action allowed")
 
         # Deny-by-default: Unknown tools must be explicitly approved

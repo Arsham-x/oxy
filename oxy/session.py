@@ -233,6 +233,15 @@ class Session:
             "content": result_content,
         })
 
+    def commit_compaction(self, before_count: int, after_count: int, summary: str):
+        """Record context compaction checkpoint in the transaction ledger."""
+        payload = {
+            "before_count": before_count,
+            "after_count": after_count,
+            "summary_preview": summary[:200],
+        }
+        self._append_entry("compaction_checkpoint", payload)
+
     def has_unresolved_tool_calls(self) -> bool:
         """Check if any tool calls were dispatched without receiving results."""
         return len(self.pending_tool_calls) > 0

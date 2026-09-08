@@ -21,41 +21,24 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.styles import Style as PTStyle
 
+from xml.sax.saxutils import escape as _xml_escape
+
 from .config import HISTORY_FILE
 
 
 # ── Slash commands for tab-completion ─────────────────────────────
+# Canonical registry lives in commands.py; this re-export keeps prompt_toolkit
+# completion in sync without duplicating the command table.
 
-SLASH_COMMANDS = [
-    "/help",
-    "/clear",
-    "/system",
-    "/model",
-    "/history",
-    "/save",
-    "/config",
-    "/tokens",
-    "/copy",
-    "/theme",
-    "/keys",
-    "/agent",
-    "/tools",
-    "/permissions",
-    "/skills",
-    "/sessions",
-    "/resume",
-    "/test",
-    "/review",
-    "/refactor",
-    "/add",
-    "/drop",
-    "/files",
-    "/git",
-    "/memory",
-    "/compact",
-    "/quit",
-    "/exit",
-]
+try:
+    from .commands import SLASH_COMMANDS  # noqa: F401  (re-exported)
+except Exception:  # commands imports prompt_toolkit-free deps only; fallback is defensive
+    SLASH_COMMANDS = [
+        "/help", "/clear", "/compact", "/quit", "/tools", "/permissions",
+        "/skills", "/add", "/drop", "/files", "/git", "/memory", "/agent",
+        "/model", "/system", "/keys", "/sessions", "/resume", "/history",
+        "/save", "/copy", "/tokens", "/theme", "/config",
+    ]
 
 
 # ── Build prompt session ──────────────────────────────────────────
@@ -120,9 +103,10 @@ def make_toolbar(
         elapsed = datetime.now() - start_time
         mins = int(elapsed.total_seconds()) // 60
         secs = int(elapsed.total_seconds()) % 60
+        safe_model = _xml_escape(str(model))
 
         parts = [
-            f" <b>{model}</b>",
+            f" <b>{safe_model}</b>",
             f"{msg_count} turns",
             f"{token_total:,} tok",
             f"{mins}:{secs:02d}",

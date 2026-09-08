@@ -343,6 +343,7 @@ def render_cockpit_header(theme: dict[str, Any] | None = None, animated: bool = 
 
     is_tty = sys.stdout.isatty()
     art_w = max(len(line) for line, _ in OXY_BLOCK_ART)
+    version = "v1.0.0"
 
     if cols >= 45:
         margin = max(0, (cols - art_w) // 2)
@@ -363,7 +364,6 @@ def render_cockpit_header(theme: dict[str, Any] | None = None, animated: bool = 
 
         # AGENT badge — right-aligned under the art
         badge = "A G E N T"
-        version = "v1.0.0"
         badge_text = f"{badge}  \033[2m{version}\033[0m"
         badge_visible_len = len(badge) + 2 + len(version)
         badge_pad = margin + art_w - badge_visible_len

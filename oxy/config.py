@@ -52,6 +52,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "sub_agent_enabled":    False,
     "sub_agent_model":      "",  # empty = use main model
     "sub_agent_max_tokens": 2048,
+    "sub_agent_max_iterations": 6,  # tool-loop budget for isolated sub-agent runs
 
     # Permissions
     "permission_mode":      "ask",  # ask | auto

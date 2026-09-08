@@ -382,6 +382,55 @@ def content_search(pattern: str, path: str = ".", max_results: int = 40) -> Tool
     return ToolResult(True, output, metadata={"count": len(results)})
 
 
+def list_dir(path: str = ".", max_entries: int = 100) -> ToolResult:
+    """List directory entries with type markers, skipping noisy dirs."""
+    base = Path(path).expanduser().resolve()
+    if not base.exists():
+        return ToolResult(False, f"Error: Path '{path}' does not exist.")
+    if not base.is_dir():
+        return ToolResult(False, f"Error: '{path}' is not a directory.")
+
+    try:
+        entries = sorted(base.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+    except PermissionError:
+        return ToolResult(False, f"Error: Permission denied reading '{path}'.")
+    except Exception as e:
+        return ToolResult(False, f"Error listing '{path}': {e}")
+
+    lines = []
+    dirs_count = files_count = 0
+    for entry in entries:
+        if entry.name in IGNORED_DIRS and entry.is_dir():
+            continue
+        if entry.name.startswith(".") and entry.is_dir() and entry.name not in (".oxy",):
+            continue
+        if entry.is_dir():
+            lines.append(f"  📁 {entry.name}/")
+            dirs_count += 1
+        elif entry.is_symlink():
+            lines.append(f"  🔗 {entry.name} → {os.readlink(entry)}")
+            files_count += 1
+        else:
+            try:
+                size = entry.stat().st_size
+                size_str = f"{size/1024:.1f}K" if size >= 1024 else f"{size}B"
+            except OSError:
+                size_str = "?"
+            lines.append(f"  📄 {entry.name} ({size_str})")
+            files_count += 1
+        if len(lines) >= max_entries:
+            break
+
+    if not lines:
+        return ToolResult(True, f"Directory '{path}' is empty.", metadata={"dirs": 0, "files": 0})
+
+    header = f"Contents of '{path}' ({dirs_count} dirs, {files_count} files):"
+    output = header + "\n" + "\n".join(lines)
+    if len(lines) >= max_entries:
+        output += f"\n  ... capped at {max_entries} entries."
+    return ToolResult(True, output, metadata={"dirs": dirs_count, "files": files_count, "path": str(base)})
+
+
 def git_status() -> ToolResult:
     """Return git branch, status, and modified files."""
     try:
@@ -617,6 +666,26 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "list_dir",
+            "description": "List directory contents with file/folder markers and sizes. Ideal for exploring codebase layout.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Directory path to list (default: '.').",
+                    },
+                    "max_entries": {
+                        "type": "integer",
+                        "description": "Maximum number of entries to return (default: 100).",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "save_memory",
             "description": "Save important user preferences, recurring rules, or project facts to persistent memory.",
             "parameters": {
@@ -696,6 +765,7 @@ class ToolRegistry:
             "bash": bash,
             "file_search": file_search,
             "content_search": content_search,
+            "list_dir": list_dir,
             "git_status": git_status,
             "save_memory": tool_save_memory,
             "recall_memory": tool_recall_memory,
@@ -703,7 +773,7 @@ class ToolRegistry:
         }
         # Tools that are read-only and safe to auto-execute without asking
         self._safe_tools = {
-            "read_file", "file_search", "content_search", "git_status", "recall_memory", "load_skill"
+            "read_file", "file_search", "content_search", "list_dir", "git_status", "recall_memory", "load_skill"
         }
 
     def register(self, name: str, fn: Callable[..., ToolResult], safe: bool = False):

@@ -405,6 +405,136 @@ class TestOXYArchitecture(unittest.TestCase):
             partial_cfg = {"model": "gpt-4o"}
             self.assertIsNone(partial_cfg.get("api_key"))
 
+    # ── 19. P1-4: list_dir Tool & Navigation ───────────────────────
+    def test_list_dir_tool(self):
+        from oxy.tools import list_dir
+        with tempfile.TemporaryDirectory() as tmpdir:
+            td = Path(tmpdir)
+            (td / "subdir").mkdir()
+            (td / "file_a.py").write_text("print(1)")
+            (td / "file_b.txt").write_text("hello world")
+
+            res = list_dir(str(td))
+            self.assertTrue(res.success)
+            self.assertIn("📁 subdir/", res.output)
+            self.assertIn("file_a.py", res.output)
+            self.assertIn("file_b.txt", res.output)
+            self.assertEqual(res.metadata["dirs"], 1)
+            self.assertEqual(res.metadata["files"], 2)
+
+    # ── 20. P1-3: Frozen Prompt Refresh Seam ───────────────────────
+    def test_frozen_prompt_refresh_seam(self):
+        cfg = DEFAULT_CONFIG.copy()
+        cfg["api_key"] = "mock-key"
+        engine = ChatEngine(cfg)
+
+        initial_prompt = engine._frozen_system_prompt
+        # Mutate system prompt via set_system (which triggers refresh)
+        engine.set_system("New Architect Persona Directive")
+        self.assertNotEqual(engine._frozen_system_prompt, initial_prompt)
+        self.assertIn("New Architect Persona Directive", engine._frozen_system_prompt)
+
+        # Messages built after refresh must reflect the updated prompt
+        msgs = engine._build_messages()
+        self.assertEqual(msgs[0]["content"], engine._frozen_system_prompt)
+
+    # ── 21. P1-2: Token Budget & Manual Compaction ─────────────────
+    def test_token_budget_and_manual_compaction(self):
+        cfg = DEFAULT_CONFIG.copy()
+        cfg["api_key"] = "mock-key"
+        cfg["context_window"] = 4096
+        engine = ChatEngine(cfg)
+
+        self.assertEqual(engine._context_window(), 4096)
+
+        # Populate history with turns
+        engine.history = [
+            {"role": "user", "content": f"Turn {i}: please analyze this code"}
+            for i in range(14)
+        ]
+        tokens = engine._estimate_tokens(engine.history)
+        self.assertGreater(tokens, 0)
+
+        # Manual compaction should preserve recent turns and return removed count
+        removed = engine.compact_now(keep_recent=4)
+        self.assertGreater(removed, 0)
+        # History should now be 1 summary block + 4 recent turns
+        self.assertEqual(len(engine.history), 5)
+        self.assertIn("summary of earlier turns", engine.history[0]["content"])
+        self.assertEqual(engine.history[-1]["content"], "Turn 13: please analyze this code")
+
+    # ── 22. P1-5: Command Registry Dispatch & Aliases ──────────────
+    def test_command_registry_dispatch_and_aliases(self):
+        from oxy.commands import get_command, COMMANDS, SLASH_COMMANDS
+
+        # Verify command objects and aliases
+        help_cmd = get_command("/help")
+        self.assertIsNotNone(help_cmd)
+        self.assertEqual(help_cmd.name, "/help")
+        self.assertEqual(get_command("/h"), help_cmd)
+        self.assertEqual(get_command("/?"), help_cmd)
+
+        quit_cmd = get_command("/quit")
+        self.assertIsNotNone(quit_cmd)
+        self.assertEqual(get_command("/exit"), quit_cmd)
+        self.assertEqual(get_command("/q"), quit_cmd)
+
+        compact_cmd = get_command("/compact")
+        self.assertIsNotNone(compact_cmd)
+        self.assertIn("/compact", SLASH_COMMANDS)
+
+        # Verification of argument requirement
+        add_cmd = get_command("/add")
+        self.assertTrue(add_cmd.needs_arg)
+
+    # ── 23. P1-7: SubAgent Tool Scoping & History Isolation ────────
+    def test_subagent_tool_isolation_and_scoping(self):
+        from oxy.engine import SubAgent
+
+        cfg = DEFAULT_CONFIG.copy()
+        cfg["api_key"] = "mock-key"
+        engine = ChatEngine(cfg)
+
+        sa = SubAgent(engine, persona="reviewer")
+        # SubAgent must only have access to safe inspection tools
+        self.assertIn("read_file", sa.allowed_tools)
+        self.assertIn("file_search", sa.allowed_tools)
+        self.assertIn("list_dir", sa.allowed_tools)
+        self.assertNotIn("write_file", sa.allowed_tools)
+        self.assertNotIn("edit_file", sa.allowed_tools)
+        self.assertNotIn("bash", sa.allowed_tools)
+
+        filtered = sa._filtered_schemas()
+        schema_names = {s["function"]["name"] for s in filtered}
+        self.assertTrue(schema_names.issubset(sa.allowed_tools))
+        self.assertNotIn("write_file", schema_names)
+        self.assertNotIn("bash", schema_names)
+
+        # SubAgent budget and iterations are enforced
+        self.assertEqual(sa.max_iterations, 6)
+        self.assertEqual(sa.max_tokens, 2048)
+
+    # ── 24. P1-1: Stream Assembly Data Structures ──────────────────
+    def test_stream_assembly_structures(self):
+        from oxy.engine import (
+            AssembledFunction, AssembledToolCall, AssembledMessage,
+            AssembledChoice, AssembledUsage, AssembledResponse
+        )
+
+        fn = AssembledFunction(name="read_file", arguments='{"path": "test.py"}')
+        tc = AssembledToolCall(id="call_123", function=fn)
+        msg = AssembledMessage(content="Hello world", tool_calls=[tc], reasoning_content="Thinking...")
+        choice = AssembledChoice(message=msg)
+        usage = AssembledUsage(prompt_tokens=10, completion_tokens=25)
+        resp = AssembledResponse(choices=[choice], usage=usage, was_streamed=True, thought_rendered=True)
+
+        self.assertEqual(resp.choices[0].message.content, "Hello world")
+        self.assertEqual(resp.choices[0].message.tool_calls[0].function.name, "read_file")
+        self.assertEqual(resp.usage.prompt_tokens, 10)
+        self.assertEqual(resp.usage.completion_tokens, 25)
+        self.assertTrue(resp.was_streamed)
+        self.assertTrue(resp.thought_rendered)
+
 
 if __name__ == "__main__":
     unittest.main()
