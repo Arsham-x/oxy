@@ -12,6 +12,9 @@ OXY operates directly in your local environment with native shell execution and 
 | **Indirect Prompt Injection** | Untrusted repository file contains hidden instructions to rewrite agent steering files. | **Steering Protection Gate**: Edits to steering files (`system_prompt.md`, `.cursorrules`) require mandatory human confirmation. |
 | **Credential Exfiltration** | Model attempts to read or curl private keys (`~/.ssh/id_rsa`, `~/.aws/credentials`). | **Credential Shield**: Direct reads or pipe extractions of private keys are categorically blocked. |
 | **Autonomous Privilege Escalation** | Attacker leverages `--yolo` mode to overwrite system binaries or change configs. | **Non-Bypassable Constraint**: The security floor is decoupled from user permission flags. |
+| **Hallucinated / Injected Tool** | Model invents or is injected with a call to an unregistered tool (`delete_database`, `exfiltrate`). | **Deny-by-Default**: Unknown tools are blocked unless explicitly allowlisted in `KNOWN_TOOLS`. |
+| **Ambient Prompt Injection** | Cloned repo ships an attacker-crafted `system_prompt.md` in the working directory. | **Ambient Quarantine**: CWD prompt files are never auto-loaded; explicit `system_prompt_file` opt-in only. |
+| **Sub-Agent Scope Escape** | Delegated sub-agent attempts workspace mutation or shell execution beyond its task. | **Tool Scoping**: Sub-agents are restricted to read-only tools; mutations require operator opt-in. |
 
 ---
 
@@ -75,3 +78,36 @@ To mitigate this, OXY maintains a strict registry of **Steering Files**:
 | **YOLO** | `--yolo` | Convenience flag for `--permission-mode auto`. **The Hardline Security Floor remains fully active.** |
 
 The current permission mode is always visible in the status line at the bottom of the terminal (`ask` or `auto`), and can be toggled at runtime with `/permissions [ask|auto]`.
+
+---
+
+## 5. Deny-by-Default Tool Policy
+
+`SecurityGate.evaluate_tool_call()` enforces an explicit allowlist (`KNOWN_TOOLS`). Any tool name not registered — including hallucinated or prompt-injected tool names from the model — is categorically **BLOCKED**:
+
+```
+Unknown tool 'delete_database' blocked by security floor.
+Add explicit policy branch in SecurityGate.evaluate_tool_call.
+```
+
+New tools must be deliberately added to `KNOWN_TOOLS`, assigned a safety classification (`_safe_tools` vs mutating), and given an explicit policy branch before the model can invoke them.
+
+---
+
+## 6. Sub-Agent Tool Scoping & Isolation
+
+Sub-agents (`/agent [role] <task>`) run with least-privilege tool access:
+
+- **Allowed by default** (`SubAgent.DEFAULT_ALLOWED_TOOLS`): `read_file`, `file_search`, `content_search`, `list_dir`, `git_status`, `recall_memory`, `load_skill` — read-only exploration only.
+- **Blocked by default**: `write_file`, `edit_file`, `bash`, `save_memory`. A sub-agent cannot mutate workspace files, execute shell commands, or overwrite long-term memory unless the operator explicitly opts in via the `sub_agent_tools` config list.
+- Out-of-scope tool calls are denied with a corrective error fed back into the sub-agent loop, so it continues with available tools instead of failing.
+- Sub-agents run in an isolated message list — they never touch `engine.history` or the `.oxy/sessions/<id>.jsonl` ledger — while token usage is still aggregated into the parent `TokenTracker` for accurate accounting.
+- The bounded loop (`sub_agent_max_iterations`, default 6) caps autonomous tool iterations.
+
+---
+
+## 7. Ambient Prompt Quarantine (CWD Immunity)
+
+OXY **never** implicitly loads a `system_prompt.md` file from the current working directory. `resolve_system_prompt()` only reads a prompt file when the operator explicitly sets `system_prompt_file` in config.
+
+Rationale: auto-loading ambient files is a classic prompt-injection vector — merely launching the agent inside a cloned repository containing an attacker-crafted `system_prompt.md` would silently activate hostile instructions. Explicit opt-in eliminates this entire attack class while `/system [text|edit|reload]` remains available for deliberate prompt control.

@@ -15,7 +15,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00ff88?style=flat-square)](LICENSE)
-[![Tests: 16/16](https://img.shields.io/badge/tests-16%2F16-brightgreen?style=flat-square)](tests/test_e2e_suite.py)
+[![Tests: 26/26](https://img.shields.io/badge/tests-26%2F26-brightgreen?style=flat-square)](tests/test_e2e_suite.py)
 [![Security: Hardline Floor](https://img.shields.io/badge/security-hardline%20floor-yellow?style=flat-square)](docs/SECURITY.md)
 
 *"Never write complex, bloated code when a simpler, robust architecture achieves the exact same result."*
@@ -157,7 +157,7 @@ Switch anytime with `/theme cyber` or pass `--theme aurora` at launch.
 │                                                              │
 │  ┌─────────────────────────────────────────────────────────┐│
 │  │ KV Prefix-Frozen System Prompt                          ││
-│  │ (persona + skills index + memory → byte-frozen at init) ││
+│  │ (byte-frozen; rebuilt on /system /add /drop /memory)   ││
 │  └────────────────────────┬────────────────────────────────┘│
 │                           ▼                                  │
 │  ┌─────────────────────────────────────────────────────────┐│
@@ -181,7 +181,7 @@ Switch anytime with `/theme cyber` or pass `--theme aurora` at launch.
 │  └────────────────────────┬────────────────────────────────┘│
 │                           ▼                                  │
 │  ┌─────────────────────────────────────────────────────────┐│
-│  │ Tool Registry (10 tools: read, write, edit, bash, ...)  ││
+│  │ Tool Registry (11 tools incl. list_dir + 4 sub-agent)    ││
 │  └─────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -200,6 +200,7 @@ See [Architecture Deep-Dive](docs/ARCHITECTURE.md) for full subsystem documentat
 | `bash` | mutating | Run shell commands with timeout and output truncation |
 | `file_search` | read-only | Glob search, skips `node_modules` / `.git` / build dirs |
 | `content_search` | read-only | Grep text/regex across the workspace |
+| `list_dir` | read-only | List directory contents with dirs-first sorting and size badges |
 | `git_status` | read-only | Branch, staged files, working tree changes |
 | `save_memory` | mutating | Store persistent user preferences and project rules |
 | `recall_memory` | read-only | Query long-term knowledge base |
@@ -211,18 +212,22 @@ See [Architecture Deep-Dive](docs/ARCHITECTURE.md) for full subsystem documentat
 
 | Command | Description |
 | :--- | :--- |
-| `/help` | Command reference |
+| `/help` (`/h`, `/?`) | Command reference |
+| `/clear` | Clear conversation history from working memory |
+| `/compact` | Consolidate older turns into a summary to free context |
+| `/quit` (`/exit`, `/q`) | Exit |
 | `/tools` | List tools and safety status |
-| `/permissions [ask\|auto]` | View or toggle permission mode |
-| `/skills [name]` | List or inspect skills |
-| `/add <file>` | Pin file into context |
-| `/drop <file>` | Remove file from context |
+| `/permissions [ask\|auto]` (`/permission`) | View or toggle permission mode |
+| `/skills [name]` (`/skill`) | List or inspect skills |
+| `/add <file>` | Pin file into context (rebuilds frozen prompt) |
+| `/drop <file>` | Remove file from context (rebuilds frozen prompt) |
 | `/files` | List active files and project tree |
 | `/git` | Git branch and status |
-| `/memory` | List persistent memories |
+| `/memory [view <slug>\|clear]` | List, view, or clear persistent memories |
+| `/agent [role] <task>` | Run tool-using sub-agent (`architect`/`debugger`/`reviewer`/`general`) |
+| `/agent on\|off\|model\|iterations` | Toggle sub-agent, set model, or set iteration budget |
 | `/model [name]` | View or switch model |
-| `/system [text\|edit]` | View or edit system prompt |
-| `/agent [role] <task>` | Run sub-agent (architect/debugger/reviewer) |
+| `/system [text\|edit\|reload]` | View, set, edit, or reload system prompt |
 | `/keys` | Manage round-robin API keys |
 | `/sessions` | List saved sessions |
 | `/resume <id>` | Resume past session |
@@ -232,7 +237,6 @@ See [Architecture Deep-Dive](docs/ARCHITECTURE.md) for full subsystem documentat
 | `/tokens` | Token usage stats |
 | `/theme [name]` | Switch theme |
 | `/config` | View config |
-| `/quit` | Exit |
 
 Keyboard: `Enter` send · `Alt+Enter` newline · `Ctrl+C` cancel · `Tab` autocomplete · `↑↓` history
 
@@ -245,19 +249,20 @@ python3 -m pytest tests/test_e2e_suite.py -v
 ```
 
 ```
-16 passed in 3.67s
+26 passed in ~4s
 ```
 
-Covers: Persian typography, security floor, schema coercion, transaction ledger, parallel planner, skills system, KV cache, commands, raw key parser, cockpit header, status line, thinking blocks, turn metadata, permission modes.
+Covers: Persian typography, security floor + default-deny, schema coercion, transaction ledger (durability + orphan recovery), parallel planner, skills system, KV cache + prompt refresh seam, command registry (dispatch + aliases), raw key parser, cockpit header, status line, thinking blocks, turn metadata, permission modes, atomic config, `list_dir`, token-budgeted compaction, sub-agent scoping, streaming assembly.
 
 ---
 
 ## Documentation
 
-- **[Architecture](docs/ARCHITECTURE.md)** — System topology, ANSI engine, HarfBuzz shaping, KV cache, all 8 subsystems
-- **[Security](docs/SECURITY.md)** — Hardline floor spec, regex filters, steering file protection
+- **[Architecture](docs/ARCHITECTURE.md)** — System topology, streaming, compaction budgets, command registry, sub-agents, all 12 subsystems
+- **[Security](docs/SECURITY.md)** — Hardline floor spec, deny-by-default, steering file protection
 - **[Skills](docs/SKILLS.md)** — Progressive disclosure protocol, writing custom skills
-- **[CLI Reference](docs/CLI_REFERENCE.md)** — Flags, slash commands, keyboard bindings
+- **[CLI Reference](docs/CLI_REFERENCE.md)** — Flags, slash commands (incl. `/compact`, `/agent` controls), keyboard bindings
+- **[Reconnaissance](docs/PHASE0_RECONNAISSANCE.md)** — Phase 0 audit: strengths, weaknesses, gaps, risks, P0–P3 roadmap
 
 ---
 

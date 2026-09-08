@@ -41,64 +41,66 @@ python3 oxy.py --yolo -p "Refactor auth.py to eliminate duplicated token checks"
 All slash commands support **Tab Autocompletion**.
 
 ### Core & Navigation
-| Command | Arguments | Description |
-| :--- | :--- | :--- |
-| `/help` | None | Display the quick-reference command table. |
-| `/clear` | None | Clear current conversation history from active memory. |
-| `/quit` | None | Exit OXY cleanly, displaying session execution statistics. |
+| Command | Aliases | Arguments | Description |
+| :--- | :--- | :--- | :--- |
+| `/help` | `/h`, `/?` | None | Display the grouped command reference. |
+| `/clear` | — | None | Clear current conversation history from active memory. |
+| `/compact` | — | None | Consolidate older turns into a user-role summary to free context (auto-compaction also runs at 75% window usage). |
+| `/quit` | `/exit`, `/q` | None | Exit OXY cleanly, displaying session execution statistics. |
 
 ### Tools & Permissions
-| Command | Arguments | Description |
-| :--- | :--- | :--- |
-| `/tools` | None | List all 10 registered agent tools, parameters, and safety classifications. |
-| `/permissions` | `[ask\|auto]` | View current permission mode or toggle between interactive and autonomous execution. |
+| Command | Aliases | Arguments | Description |
+| :--- | :--- | :--- | :--- |
+| `/tools` | — | None | List all 11 registered agent tools, parameters, and safety classifications. |
+| `/permissions` | `/permission` | `[ask\|auto]` | View current permission mode or toggle between interactive and autonomous execution. |
 
 ### Procedural Skills
-| Command | Arguments | Description |
-| :--- | :--- | :--- |
-| `/skills` | None | Display table of all installed project and global skills. |
-| `/skill` | `<name>` | Inspect procedural workflow and instructions for a specific skill. |
-| `/<skill>` | `[task]` | Directly invoke an installed skill (e.g., `/test`, `/review`, `/refactor`, `/git-commit`). |
+| Command | Aliases | Arguments | Description |
+| :--- | :--- | :--- | :--- |
+| `/skills` | `/skill` | `[name]` | List all installed skills, or inspect one skill's workflow. |
+| `/<skill>` | — | `[task]` | Directly invoke an installed skill (e.g., `/test`, `/review`, `/refactor`, `/git-commit`). |
 
 ### Session Management & Durability
-| Command | Arguments | Description |
-| :--- | :--- | :--- |
-| `/sessions` | None | List saved session transaction ledgers, turn counts, and modification dates. |
-| `/resume` | `<id>` | Hot-swap active conversation state by replaying a session ledger from disk. |
-| `/history` | None | Print complete message history of the current session. |
-| `/save` | `[path]` | Export dialogue and tool execution traces to a formatted Markdown file. |
+| Command | Aliases | Arguments | Description |
+| :--- | :--- | :--- | :--- |
+| `/sessions` | — | None | List saved session transaction ledgers, turn counts, and modification dates. |
+| `/resume` | — | `<id>` | Hot-swap active conversation state by replaying a session ledger from disk. |
+| `/history` | — | None | Print complete message history of the current session. |
+| `/save` | — | `[path]` | Export dialogue and tool execution traces to a formatted Markdown file. |
 
 ### Codebase Context (Aider-Style)
-| Command | Arguments | Description |
-| :--- | :--- | :--- |
-| `/add` | `<path>` | Pin a file directly into active chat context. |
-| `/drop` | `<path>` | Remove a file from active chat context. |
-| `/files` | None | List pinned files and show the project directory structure. |
-| `/git` | None | View git branch, short status, and modified working tree files. |
+| Command | Aliases | Arguments | Description |
+| :--- | :--- | :--- | :--- |
+| `/add` | — | `<path>` | Pin a file into chat context (rebuilds the frozen system prompt). |
+| `/drop` | — | `<path>` | Remove a file from chat context (rebuilds the frozen system prompt). |
+| `/files` | — | None | List pinned files and show the project directory structure. |
+| `/git` | — | None | View git branch, short status, and modified working tree files. |
 
 ### Persistent Memory (Claude Code-Style)
-| Command | Arguments | Description |
-| :--- | :--- | :--- |
-| `/memory` | None | List all stored long-term memory entries and tags. |
-| `/memory view` | `<slug>` | View full contents of a specific memory entry. |
-| `/memory clear` | None | Purge all stored memories. |
+| Command | Aliases | Arguments | Description |
+| :--- | :--- | :--- | :--- |
+| `/memory` | — | None | List all stored long-term memory entries and tags. |
+| `/memory view` | — | `<slug>` | View full contents of a specific memory entry. |
+| `/memory clear` | — | None | Purge all stored memories (rebuilds the frozen system prompt). |
 
 ### Model & Agent Steering
-| Command | Arguments | Description |
-| :--- | :--- | :--- |
-| `/model` | `[name]` | View active model or switch models on the fly. |
-| `/system` | `[text\|edit]` | View, set inline, or open system prompt in `$EDITOR`. |
-| `/agent` | `[role] <task>` | Dispatch an isolated sub-agent (`architect`, `debugger`, `reviewer`). |
-| `/keys` | `[on\|off\|add]` | Manage round-robin API key pool and rotation strategies. |
+| Command | Aliases | Arguments | Description |
+| :--- | :--- | :--- | :--- |
+| `/model` | — | `[name]` | View active model or switch models on the fly. |
+| `/system` | — | `[text\|edit\|reload]` | View, set inline, edit in `$EDITOR`, or reload from file (rebuilds the frozen system prompt). |
+| `/agent` | — | `[role] <task>` | Dispatch an isolated tool-using sub-agent (`architect`, `debugger`, `reviewer`, `general`). Scoped to read-only tools, max 6 iterations by default; shares parent token tracker and theme. |
+| `/agent on\|off` | — | `on\|off` | Enable or disable sub-agents for this session. |
+| `/agent model` | — | `[name]` | View or set the sub-agent model (empty = main model). |
+| `/agent iterations` | — | `[N]` | View or set the sub-agent tool-loop budget (default 6). |
+| `/keys` | — | `[on\|off\|add]` | Manage round-robin API key pool and rotation strategies. |
 
 ### UI & Telemetry
-| Command | Arguments | Description |
-| :--- | :--- | :--- |
-| `/tokens` | None | Display prompt, completion, and total token usage counters. |
-| `/copy` | None | Copy the last assistant response directly to system clipboard. |
-| `/theme` | `[name]` | Switch visual theme (`cyber`, `aurora`, `minimal`). |
-| `/compact` | None | Toggle compact output mode (shorter tool displays, reduced whitespace). |
-| `/config` | None | Display active configuration parameters. |
+| Command | Aliases | Arguments | Description |
+| :--- | :--- | :--- | :--- |
+| `/tokens` | — | None | Display prompt, completion, and total token usage counters. |
+| `/copy` | — | None | Copy the last assistant response directly to system clipboard. |
+| `/theme` | — | `[name]` | Switch visual theme (`cyber`, `aurora`, `minimal`). |
+| `/config` | — | None | Display active configuration parameters (API keys masked). |
 
 ---
 
