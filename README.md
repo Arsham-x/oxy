@@ -1,25 +1,26 @@
 <div align="center">
 
 ```
-  ██████╗ ██╗  ██╗██╗   ██╗   ✦ O X Y  A G E N T ✦
- ██╔═══██╗╚██╗██╔╝╚██╗ ██╔╝   Autonomous AI Coding Assistant
- ██║   ██║ ╚███╔╝  ╚████╔╝    Production-Grade · Zero-Bloat Engine
- ██║   ██║ ██╔██╗   ╚██╔╝     OpenAI Compatible · Multi-Provider
- ╚██████╔╝██╔╝ ██╗   ██║      
-  ╚═════╝ ╚═╝  ╚═╝   ╚═╝      v1.0.0 · MIT Licensed
+  ██████╗   ██╗   ██╗ ██╗   ██╗
+ ██╔═══██╗  ╚██╗ ██╔╝ ╚██╗ ██╔╝
+ ██║   ██║   ╚████╔╝   ╚████╔╝
+ ██║   ██║    ╚██╔╝     ╚██╔╝
+ ██║   ██║     ██║       ██║
+ ╚██████╔╝     ██║       ██║
+  ╚═════╝      ╚═╝       ╚═╝
+                    A G E N T  v1.0.0
 ```
 
-### The Autonomous CLI Coding Agent Engineered for Engineers.
+### Autonomous CLI Coding Agent. Any Provider. Zero Bloat.
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-00ff88?style=flat-square)](LICENSE)
-[![Architecture: Zero-Bloat](https://img.shields.io/badge/architecture-zero--bloat-cyan?style=flat-square)](docs/ARCHITECTURE.md)
-[![Tests: 10/10 Passing](https://img.shields.io/badge/tests-10%2F10%20passing-brightgreen?style=flat-square)](tests/test_e2e_suite.py)
+[![Tests: 16/16](https://img.shields.io/badge/tests-16%2F16-brightgreen?style=flat-square)](tests/test_e2e_suite.py)
 [![Security: Hardline Floor](https://img.shields.io/badge/security-hardline%20floor-yellow?style=flat-square)](docs/SECURITY.md)
 
-*“Never write complex, bloated code when a simpler, robust architecture achieves the exact same result.”*
+*"Never write complex, bloated code when a simpler, robust architecture achieves the exact same result."*
 
-[Quickstart](#quickstart-in-30-seconds) • [Architecture](docs/ARCHITECTURE.md) • [Security Model](docs/SECURITY.md) • [Skills System](docs/SKILLS.md) • [CLI Manual](docs/CLI_REFERENCE.md)
+[Quickstart](#quickstart) · [Architecture](docs/ARCHITECTURE.md) · [Security](docs/SECURITY.md) · [Skills](docs/SKILLS.md) · [CLI Reference](docs/CLI_REFERENCE.md)
 
 </div>
 
@@ -27,35 +28,19 @@
 
 ## Why OXY?
 
-Contemporary AI coding agents suffer from two extremes: **fragile terminal abstractions** that duplicate menus on every keypress, or **spaghetti codebases spanning hundreds of files** that lock you into proprietary vendor endpoints.
+Most AI coding agents either lock you into a single vendor or ship as sprawling codebases that are impossible to understand or extend.
 
-**OXY** is engineered from first principles as an elite, single-threaded master loop:
-- **Zero Screen Duplication**: In-place ANSI delta-rewriting replaces fragile asynchronous rendering loops.
-- **Native Unicode Ligatures**: Preserves raw Unicode codepoints for hardware font shapers (HarfBuzz/Qt), guaranteeing cursive Persian and multilingual typography without disconnected letters.
-- **Durability by Design**: A persist-before-execute JSONL transaction ledger commits model actions to disk before tool execution begins.
-- **High-Performance Parallelism**: A segmented execution planner batches read-only operations across worker threads while enforcing strict sequential isolation on filesystem mutations.
-- **Non-Bypassable Hardline Security**: Catastrophic commands (`rm -rf /`, `mkfs`, raw device writes, credential dumping) are categorically blocked at the engine level—no flag can ever bypass host protection.
-
----
-
-## Architectural Comparison
-
-| Dimension | OXY | Claude Code | Hermes Agent | OpenCode | Aider |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Provider Freedom** | **Any OpenAI-compatible** (DeepSeek, Groq, Ollama, OpenRouter) | Anthropic only | Multi-provider | Multi-provider | Multi-provider |
-| **Terminal UX** | **Flicker-Free In-Place ANSI** | In-place Ink/Node | Rich Live (Flicker prone) | Textual / TUI | Standard Prompt |
-| **Multilingual Typography** | **Native HarfBuzz Cursive** | Basic Latin | Broken RTL glyphs | Terminal default | Terminal default |
-| **Tool Execution** | **Segmented Parallel Planner** | Sequential | Sequential | Concurrent | Sequential |
-| **Transaction Durability** | **Persist-Before-Execute Ledger** | Session JSONL | SQLite / State JSON | In-Memory | Git commits only |
-| **Host Security Floor** | **Non-Bypassable Hardline Floor** | Permission prompt | Permission prompt | Sandbox / Prompts | Git checkout prompt |
-| **Codebase Footprint** | **Clean Modular Python (~3k LOC)** | Node.js binary | 700+ sprawling files | Go / Node | Python |
-| **Prefix-Cache Preservation**| **Byte-Frozen System Prompt** | Yes (Anthropic) | Partial | No | Partial |
+OXY is different:
+- **Any provider** — DeepSeek, OpenAI, Groq, OpenRouter, Together AI, Ollama, LM Studio. One config, any endpoint.
+- **Zero screen duplication** — In-place ANSI rewriting. No flickering, no ghost frames.
+- **Crash-proof sessions** — Persist-before-execute ledger writes to disk before every tool runs. Resume anytime with `--resume`.
+- **Parallel reads, sequential writes** — Read-only tools run concurrently. Mutations go through strict barriers.
+- **Hardline security** — `rm -rf /`, fork bombs, credential dumps are blocked at engine level. No flag bypasses it.
+- **Clean codebase** — ~5k LOC of modular Python. Readable, hackable, no spaghetti.
 
 ---
 
-## Quickstart in 30 Seconds
-
-### 1. Installation
+## Quickstart
 
 ```bash
 git clone https://github.com/Arsham-x/oxy.git
@@ -63,171 +48,219 @@ cd oxy
 pip install -e .
 ```
 
-### 2. Interactive Cockpit Onboarding
-
-Launch the 6-step keyboard-driven setup wizard:
+### Setup wizard (6 steps, keyboard-driven)
 
 ```bash
 python3 oxy.py --setup
 ```
 
-The wizard auto-detects environment keys, configures provider endpoints, lets you select themes with arrow keys, and formats an instant summary card.
+Arrow keys navigate, Enter confirms. Auto-detects environment keys, configures providers, selects themes.
 
-### 3. Launch OXY
+### Launch
 
 ```bash
-# Interactive Coding REPL
+# Interactive REPL
 python3 oxy.py
 
-# Headless Pipeline Execution (for CI/CD or scripts)
-python3 oxy.py -p "Inspect git diff and write unit tests for modified functions"
+# Headless (CI/CD, scripts)
+python3 oxy.py -p "Review git diff and write tests for modified functions"
 
-# Resume previous session
+# Resume last session
 python3 oxy.py --resume
 ```
 
 ---
 
-## The Wonder Tunnel: Interactive Terminal Cockpit
+## Terminal Interface
+
+OXY's interface is inspired by production-grade terminal agents like Grok Build — clean, responsive, no visual clutter.
+
+### Status Line
+
+A live status bar at the bottom shows session state at a glance:
 
 ```
-  ? [Step 2/6] AI Provider (↑/↓ navigate, Enter confirm)
-  ❯ DeepSeek               DeepSeek V3 & R1 high-speed reasoning (Best value)
-    OpenAI                 Official OpenAI API (GPT-4o, o3-mini, o1)
-    Groq                   Ultra-fast LPU inference (~300+ tokens/sec)
-    OpenRouter             Unified router for Claude, GPT, DeepSeek, Mistral
-    Local (Ollama)         On-device private inference (localhost:11434)
-    Local (LM Studio)      Local GUI model server (localhost:1234)
-  ↳ ↑/↓ navigate · Enter select · 1-9 direct jump
+ deepseek-chat  │  5 turns  │  1,234 tok  │  2:15  │  ask  │  3 files  │  /help
 ```
 
-- **In-Place Redraw**: Cursor positions move up precisely $N$ lines, rewriting only modified lines.
-- **Three Aesthetic Themes**:
-  - `Cyber`: Electric cyan borders, neon badges, matrix aesthetics.
-  - `Aurora`: Northern lights palette, emerald & purple gradient highlights.
-  - `Minimal`: Clean, distraction-free monochrome for high-density terminal setups.
+Model name, turn count, token usage, elapsed time, permission mode, active files — all updating in real time.
 
----
+### Thinking Display
 
-## Deep-Dive Architectural Highlights
+When using reasoning models (DeepSeek R1, OpenAI o1/o3), thinking blocks render with elapsed time:
 
 ```
-                          ┌───────────────────────────┐
-                          │   LLM Generates Turn      │
-                          └─────────────┬─────────────┘
-                                        │
-                                        ▼
-                          ┌───────────────────────────┐
-                          │ PERSIST-BEFORE-EXECUTE:   │
-                          │ Flush Assistant Turn +    │
-                          │ Tool Calls to Disk (fsync)│
-                          └─────────────┬─────────────┘
-                                        │
-                                        ▼
-                          ┌───────────────────────────┐
-                          │ Segmented Parallel Planner│
-                          └───────┬───────────┬───────┘
-                                  │           │
-             ┌────────────────────┘           └────────────────────┐
-             ▼                                                     ▼
-┌──────────────────────────┐                             ┌───────────────────┐
-│ Concurrent Read Phase    │                             │ Mutation Barrier  │
-│ [read_file, file_search] │                             │ [write, edit, cmd]│
-│ ──► ThreadPoolExecutor   │                             │ ──► Security Gate │
-└────────────┬─────────────┘                             └─────────┬─────────┘
-             │                                                     │
-             └──────────────────────┬──────────────────────────────┘
-                                    ▼
-                          ┌───────────────────────────┐
-                          │ Commit Results to Ledger  │
-                          │ Replay to LLM for Next Turn│
-                          └───────────────────────────┘
+  ◆ Thought for 3.8s (2,450 chars)
+  ┌
+  │ The user wants to refactor the auth module...
+  │ I should first read the current implementation...
+  └
 ```
 
-### 1. Persist-Before-Execute Transaction Ledger
-Model tool calls are written to `.oxy/sessions/<session_id>.jsonl` using `os.fsync()` **before** tools run. If power drops, a process hangs, or `Ctrl+C` is triggered mid-execution, your conversation and action history remain completely intact. Resume instantly with `oxy --resume`.
+### Tool Execution
 
-### 2. Segmented Parallel Execution Planner
-Consecutive read operations run concurrently across worker threads, dropping symbol and file-search times by up to **80%**. Any file modification (`write_file`, `edit_file`) or shell command acts as an isolated sequential barrier, eliminating race conditions.
+Tools display clean status badges with timing:
 
-### 3. Non-Bypassable Hardline Security Floor
-The host security engine intercepts actions before execution:
-- Unconditionally blocks destructive commands (`rm -rf /`, `mkfs`, raw device writes, fork bombs, power halts).
-- Blocks access to credentials (`~/.ssh`, `~/.aws`, `/etc/shadow`).
-- Guarantees human confirmation on any attempted edits to agent steering files (`system_prompt.md`, `CLAUDE.md`, `.cursorrules`, `oxy_config.json`, `.env`), neutralizing prompt injection exploits.
+```
+  ● read_file  path='src/auth.py'
+  ✔ read_file · read 142 lines  85ms
 
-### 4. Progressive Disclosure Skills System (AgentSkills Standard)
-Procedural knowledge is organized in modular `.oxy/skills/<name>/SKILL.md` directories. Instead of polluting the context window with 10,000 tokens of static rules, OXY exposes a compact ~15-token index in the prompt and loads complete workflows on-demand. Includes multilingual Persian trigger keywords (`بررسی کد`, `تست`, `ساده سازی`).
+  ● edit_file  path='src/auth.py'
+  ✔ edit_file · 1 replaced  12ms
+```
 
-### 5. KV Prefix-Cache Preservation
-By byte-freezing the base system prompt and skill catalog at engine initialization, OXY ensures that providers supporting KV caching (DeepSeek, Anthropic, OpenAI) achieve **90%+ cache hits**, drastically lowering latency and API costs.
+Parallel read operations show a ⚡ indicator:
 
----
+```
+  ● ⚡ read_file  path='models.py'
+  ● ⚡ file_search  pattern='*.test.py'
+  ✔ read_file · read 89 lines  42ms
+  ✔ file_search · 7 files found  42ms
+```
 
-## Built-in Agent Tools
+### Turn Metadata
 
-| Tool | Safety Class | Description |
-| :--- | :---: | :--- |
-| `read_file` | Read-only | Read file contents with line numbering and range slicing. |
-| `write_file` | Mutating | Create new files or overwrite existing files safely. |
-| `edit_file` | Mutating | Exact search-and-replace with syntax-highlighted visual diffs. |
-| `bash` | Mutating | Run shell commands with configurable timeouts and output truncation. |
-| `file_search` | Read-only | Fast glob search skipping dependencies and build directories. |
-| `content_search`| Read-only | Grep text/regex search across project workspace. |
-| `git_status` | Read-only | Inspect active branch, staged files, and modified working tree. |
-| `save_memory` | Mutating | Store user preferences and persistent project guidelines. |
-| `recall_memory` | Read-only | Query persistent long-term knowledge base. |
-| `load_skill` | Read-only | Dynamically load specialized procedural instructions. |
+Each response includes timing:
 
----
+```
+  [turn: 2.5s]
+  1,204 + 856 = 2,060  ·  session: 12,340
+```
 
-## Interactive Slash Commands
+### Three Themes
 
-| Command | Action |
+| Theme | Style |
 | :--- | :--- |
-| `/help` | Display interactive command reference. |
-| `/tools` | List registered tools and security permission status. |
-| `/skills [name]` | View installed skills catalog or inspect specific workflows. |
-| `/sessions` | List saved session ledgers, turn counts, and modification dates. |
-| `/resume <id>` | Resume past session directly from disk. |
-| `/add <file>` | Pin file into active context window. |
-| `/drop <file>` | Unpin file from active context window. |
-| `/git` | Show git branch and changed files. |
-| `/memory` | Inspect persistent memory entries. |
-| `/model [name]` | Switch LLM model identifier on the fly. |
-| `/system [edit]` | View, modify, or open system prompt in `$EDITOR`. |
-| `/tokens` | Display session token usage statistics. |
-| `/theme [name]` | Switch cockpit visual theme. |
-| `/quit` | Exit OXY cleanly. |
+| `cyber` | Electric cyan, neon green, matrix aesthetic |
+| `aurora` | Northern lights — violet and emerald gradients |
+| `minimal` | Clean monochrome for focused work |
+
+Switch anytime with `/theme cyber` or pass `--theme aurora` at launch.
 
 ---
 
-## Verification & Test Suite
+## Architecture
 
-OXY includes an automated test suite verifying all 8 architectural subsystems:
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Terminal Cockpit (ui.py)                  │
+│     In-Place ANSI · Native Unicode · Arrow-Key Selection    │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│                   REPL Loop (app.py)                         │
+│       Prompt Toolkit · History · Tab Completion · Commands   │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│               Agentic Engine (engine.py)                     │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ KV Prefix-Frozen System Prompt                          ││
+│  │ (persona + skills index + memory → byte-frozen at init) ││
+│  └────────────────────────┬────────────────────────────────┘│
+│                           ▼                                  │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ OpenAI-Compatible Client                                ││
+│  │ (exponential backoff + round-robin key rotation)        ││
+│  └────────────────────────┬────────────────────────────────┘│
+│                           ▼                                  │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ Persist-Before-Execute Ledger                           ││
+│  │ (.oxy/sessions/<id>.jsonl → fsync before execution)     ││
+│  └────────────────────────┬────────────────────────────────┘│
+│                           ▼                                  │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ Segmented Parallel Planner                              ││
+│  │ reads → concurrent  │  writes → sequential barrier      ││
+│  └────────────────────────┬────────────────────────────────┘│
+│                           ▼                                  │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ Hardline Security Floor                                 ││
+│  │ (catastrophic block + steering file protection)         ││
+│  └────────────────────────┬────────────────────────────────┘│
+│                           ▼                                  │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ Tool Registry (10 tools: read, write, edit, bash, ...)  ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+```
+
+See [Architecture Deep-Dive](docs/ARCHITECTURE.md) for full subsystem documentation.
+
+---
+
+## Built-in Tools
+
+| Tool | Safety | What it does |
+| :--- | :---: | :--- |
+| `read_file` | read-only | Read file contents with line numbers and range slicing |
+| `write_file` | mutating | Create or overwrite files |
+| `edit_file` | mutating | Exact search-and-replace with visual diffs |
+| `bash` | mutating | Run shell commands with timeout and output truncation |
+| `file_search` | read-only | Glob search, skips `node_modules` / `.git` / build dirs |
+| `content_search` | read-only | Grep text/regex across the workspace |
+| `git_status` | read-only | Branch, staged files, working tree changes |
+| `save_memory` | mutating | Store persistent user preferences and project rules |
+| `recall_memory` | read-only | Query long-term knowledge base |
+| `load_skill` | read-only | Load procedural instructions on demand |
+
+---
+
+## Slash Commands
+
+| Command | Description |
+| :--- | :--- |
+| `/help` | Command reference |
+| `/tools` | List tools and safety status |
+| `/permissions [ask\|auto]` | View or toggle permission mode |
+| `/skills [name]` | List or inspect skills |
+| `/add <file>` | Pin file into context |
+| `/drop <file>` | Remove file from context |
+| `/files` | List active files and project tree |
+| `/git` | Git branch and status |
+| `/memory` | List persistent memories |
+| `/model [name]` | View or switch model |
+| `/system [text\|edit]` | View or edit system prompt |
+| `/agent [role] <task>` | Run sub-agent (architect/debugger/reviewer) |
+| `/keys` | Manage round-robin API keys |
+| `/sessions` | List saved sessions |
+| `/resume <id>` | Resume past session |
+| `/history` | Show conversation turns |
+| `/save [file]` | Export to markdown |
+| `/copy` | Copy last response to clipboard |
+| `/tokens` | Token usage stats |
+| `/theme [name]` | Switch theme |
+| `/config` | View config |
+| `/quit` | Exit |
+
+Keyboard: `Enter` send · `Alt+Enter` newline · `Ctrl+C` cancel · `Tab` autocomplete · `↑↓` history
+
+---
+
+## Tests
 
 ```bash
-PYTHONPATH=. python3 tests/test_e2e_suite.py
+python3 -m pytest tests/test_e2e_suite.py -v
 ```
 
 ```
-..................
-Ran 10 tests in 0.523s
-
-OK
+16 passed in 3.67s
 ```
+
+Covers: Persian typography, security floor, schema coercion, transaction ledger, parallel planner, skills system, KV cache, commands, raw key parser, cockpit header, status line, thinking blocks, turn metadata, permission modes.
 
 ---
 
-## Modular Documentation
+## Documentation
 
-- 📐 **[Architecture Deep-Dive](docs/ARCHITECTURE.md)**: System topology, In-Place ANSI engine, HarfBuzz shaping, KV prefix-cache preservation.
-- 🛡 **[Security Model](docs/SECURITY.md)**: Hardline floor specifications, regex filters, steering file integrity.
-- 🧩 **[Skills & Workflows](docs/SKILLS.md)**: Progressive disclosure protocol, frontmatter schema, writing custom skills.
-- 📖 **[CLI Manual & Reference](docs/CLI_REFERENCE.md)**: Complete flags, slash commands, headless scripts, and keybindings.
+- **[Architecture](docs/ARCHITECTURE.md)** — System topology, ANSI engine, HarfBuzz shaping, KV cache, all 8 subsystems
+- **[Security](docs/SECURITY.md)** — Hardline floor spec, regex filters, steering file protection
+- **[Skills](docs/SKILLS.md)** — Progressive disclosure protocol, writing custom skills
+- **[CLI Reference](docs/CLI_REFERENCE.md)** — Flags, slash commands, keyboard bindings
 
 ---
 
 ## License
 
-Distributed under the **MIT License**. Engineered with passion by **[Arsham](https://github.com/Arsham-x)**.
+MIT · Built by **[Arsham](https://github.com/Arsham-x)**

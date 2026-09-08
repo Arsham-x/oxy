@@ -73,3 +73,5 @@ To mitigate this, OXY maintains a strict registry of **Steering Files**:
 | **Interactive (Default)** | `--permission-mode ask` | Read-only tools execute automatically. Mutating operations (`write_file`, `edit_file`, `bash`, `save_memory`) prompt for confirmation (`yes` / `no` / `always for session`). |
 | **Autonomous** | `--permission-mode auto` | Safe mutations execute automatically without interactive prompts. Hardline floor and steering file gate remain active. |
 | **YOLO** | `--yolo` | Convenience flag for `--permission-mode auto`. **The Hardline Security Floor remains fully active.** |
+
+The current permission mode is always visible in the status line at the bottom of the terminal (`ask` or `auto`), and can be toggled at runtime with `/permissions [ask|auto]`.

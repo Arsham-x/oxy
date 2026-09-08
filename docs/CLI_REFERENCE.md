@@ -97,11 +97,34 @@ All slash commands support **Tab Autocompletion**.
 | `/tokens` | None | Display prompt, completion, and total token usage counters. |
 | `/copy` | None | Copy the last assistant response directly to system clipboard. |
 | `/theme` | `[name]` | Switch visual theme (`cyber`, `aurora`, `minimal`). |
+| `/compact` | None | Toggle compact output mode (shorter tool displays, reduced whitespace). |
 | `/config` | None | Display active configuration parameters. |
 
 ---
 
-## 3. Keyboard Bindings
+## 3. Status Line
+
+The bottom toolbar displays live session telemetry, inspired by Grok Build's status bar:
+
+```
+ deepseek-chat  │  5 turns  │  1,234 tok  │  2:15  │  ask  │  3 files  │  /help
+```
+
+| Segment | Description |
+| :--- | :--- |
+| Model name | Active model identifier (e.g., `deepseek-chat`, `gpt-4o`) |
+| Turn count | Number of conversation turns in the current session |
+| Token total | Cumulative token usage, comma-formatted |
+| Timer | Elapsed session time in `M:SS` format |
+| Permission mode | `ask` (interactive confirmation) or `auto` (autonomous) |
+| Active files | Number of files pinned into context via `/add` |
+| Memory count | Number of persistent memory entries |
+| Round-robin | `rr` indicator when round-robin key rotation is active |
+| Hint | `/help` shortcut reminder |
+
+---
+
+## 4. Keyboard Bindings
 
 | Key Combination | Action |
 | :--- | :--- |
@@ -111,3 +134,30 @@ All slash commands support **Tab Autocompletion**.
 | `Tab` | Autocomplete slash commands. |
 | `↑` / `↓` | Navigate command history across sessions (stored in `~/.oxy_history`). |
 | `1` – `9` | Direct numerical jump in setup selection menus. |
+| `j` / `k` | Vim-style navigation in selection menus. |
+
+---
+
+## 5. Turn Metadata
+
+Each AI response displays timing and token telemetry:
+
+```
+  [turn: 2.5s]
+  1,204 + 856 = 2,060  ·  session: 12,340
+```
+
+- **Turn time**: Wall-clock duration of the agentic turn
+- **Token breakdown**: Prompt tokens + completion tokens = turn total
+- **Session total**: Cumulative tokens across all turns
+
+### Thinking Display (Reasoning Models)
+
+When using reasoning models (DeepSeek R1, OpenAI o1/o3), thinking blocks render with elapsed time:
+
+```
+  ◆ Thought for 3.8s (2,450 chars)
+  ┌
+  │ The user wants to refactor the auth module...
+  └
+```
