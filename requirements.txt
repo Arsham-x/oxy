@@ -1,0 +1,5 @@
+openai>=1.40.0
+rich>=13.7.0
+prompt_toolkit>=3.0.40
+arabic-reshaper>=3.0.0
+python-bidi>=0.4.2

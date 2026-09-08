@@ -1,0 +1,19 @@
+{
+  "base_url": "https://api.deepseek.com/v1",
+  "api_key": "your-api-key-here",
+  "model": "deepseek-chat",
+  "system_prompt": "You are OXY, an elite autonomous AI coding agent.",
+  "system_prompt_file": "",
+  "max_history": 20,
+  "temperature": 0.7,
+  "max_tokens": 4096,
+  "stream": true,
+  "round_robin": false,
+  "round_robin_keys": [],
+  "round_robin_strategy": "sequential",
+  "sub_agent_enabled": false,
+  "sub_agent_model": "",
+  "sub_agent_max_tokens": 2048,
+  "permission_mode": "ask",
+  "theme": "cyber"
+}

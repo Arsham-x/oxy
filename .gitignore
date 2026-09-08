@@ -1,0 +1,32 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OXY Local Runtime Data & Sessions
+.oxy/
+oxy_config.json
+.oxy_history
+
+# Environment & Credentials
+.env
+.env.*
+!.env.example
+
+# Build & Packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
