@@ -303,26 +303,25 @@ def _ask_yes_no(prompt_text: str, default: bool = False, theme: dict = None) -> 
 
 
 def _animate_setup_complete():
-    """Lively animated initialization sequence showing engine subsystems arming."""
+    """Clean animated initialization sequence."""
     if not sys.stdout.isatty():
         return
-    accent = "\033[1;36m"
     green = "\033[1;32m"
     dim = "\033[2m"
     reset = "\033[0m"
 
     steps = [
-        "Binding segmented parallel execution planner...",
-        "Hardline security floor active & verified...",
-        "Freezing base system prompt for KV prefix cache...",
-        "Initializing durable transaction ledger in .oxy/sessions/...",
+        "Parallel execution planner",
+        "Security floor",
+        "KV prefix cache",
+        "Transaction ledger",
     ]
     sys.stdout.write("\n")
     for step in steps:
-        sys.stdout.write(f"  {accent}⠋{reset} {dim}{step}{reset}\r")
+        sys.stdout.write(f"  {dim}· {step}...{reset}\r")
         sys.stdout.flush()
-        time.sleep(0.04)
-        sys.stdout.write(f"  {green}✔{reset} {dim}{step[:-3]} [OK]{reset}\n")
+        time.sleep(0.05)
+        sys.stdout.write(f"  {green}✔{reset} {dim}{step}{reset}\n")
         sys.stdout.flush()
     sys.stdout.write("\n")
     sys.stdout.flush()
@@ -483,31 +482,30 @@ def setup_wizard() -> dict[str, Any]:
     # ── Save Configuration ─────────────────────────────────────
     save_config(config)
 
-    # ── Hermes-Style Configuration Summary Dashboard ───────────
+    # ── Configuration Summary ──────────────────────────────────
     console.print()
     t = Table.grid(padding=(0, 2))
-    t.add_column(style="bold cyan", justify="right")
+    t.add_column(style="dim", justify="right")
     t.add_column(style="bold white")
 
-    t.add_row("Language", lang_options[lang_idx][0])
-    t.add_row("Provider", provider["name"])
-    t.add_row("Endpoint", config["base_url"])
-    t.add_row("Model", config["model"])
-    t.add_row("API Key", _mask_key(config["api_key"]))
-    t.add_row("Theme", chosen_theme_key.capitalize())
-    t.add_row("Security Gate", f"[yellow]{config['permission_mode']}[/]")
-    t.add_row("Tools", "[bold green]9 active tools[/] (read, write, edit, bash, glob, grep...)")
-    t.add_row("Config File", CONFIG_FILE)
+    t.add_row("language", lang_options[lang_idx][0])
+    t.add_row("provider", provider["name"])
+    t.add_row("endpoint", config["base_url"])
+    t.add_row("model", config["model"])
+    t.add_row("key", _mask_key(config["api_key"]))
+    t.add_row("theme", chosen_theme_key)
+    t.add_row("security", config["permission_mode"])
+    t.add_row("tools", "[green]9 active[/]")
+    t.add_row("config", CONFIG_FILE)
 
     console.print(Panel(
         t,
         title=f"[bold green]✔ {s['done_title']}[/]",
-        subtitle="[dim]Configuration saved · Ready to code[/]",
         border_style="green",
         box=box.ROUNDED,
-        padding=(1, 2),
+        padding=(0, 1),
     ))
     console.print()
-    console.print(f"  [bold cyan]Launch OXY anytime with:[/] [bold white on #111b27] python3 oxy.py [/]\n")
+    console.print(f"  [dim]Run[/] [bold cyan]python3 oxy.py[/] [dim]to start[/]\n")
 
     return config

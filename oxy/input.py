@@ -1,5 +1,10 @@
 """
-OXY Input — prompt_toolkit setup with auto-completion and dynamic session toolbar.
+OXY Input — prompt_toolkit setup with Grok Build-style status line and contextual hints.
+
+Status line pattern (Grok Build inspired):
+  model │ N turns │ N,NNN tokens │ M:SS │ mode │ /help
+
+The prompt uses a clean ❯ chevron matching Grok Build's input style.
 """
 
 from __future__ import annotations
@@ -47,6 +52,7 @@ SLASH_COMMANDS = [
     "/files",
     "/git",
     "/memory",
+    "/compact",
     "/quit",
     "/exit",
 ]
@@ -87,12 +93,12 @@ def make_prompt_session(theme: dict[str, Any]) -> PromptSession:
 # ── Prompt Formatter ──────────────────────────────────────────────
 
 def format_prompt(theme: dict[str, Any]) -> HTML:
-    """Return the styled prompt prefix."""
-    char = theme.get("prompt_char", "›")
+    """Return the styled prompt prefix — clean ❯ chevron."""
+    char = theme.get("prompt_char", "❯")
     return HTML(f"<b>{char}</b> ")
 
 
-# ── Toolbar ───────────────────────────────────────────────────────
+# ── Status Line (Grok Build inspired) ────────────────────────────
 
 def make_toolbar(
     model: str,
@@ -104,8 +110,12 @@ def make_toolbar(
     rr_active: bool,
     active_files_count: int = 0,
     memory_count: int = 0,
+    permission_mode: str = "ask",
 ) -> Callable:
-    """Return a callable that generates the bottom status bar."""
+    """Return a callable that generates the Grok Build-style status line.
+
+    Layout: model │ turns │ tokens │ timer │ mode │ files │ /help
+    """
     def _toolbar():
         elapsed = datetime.now() - start_time
         mins = int(elapsed.total_seconds()) // 60
@@ -113,19 +123,25 @@ def make_toolbar(
 
         parts = [
             f" <b>{model}</b>",
-            f"turns: {msg_count}",
-            f"tokens: {token_total:,}",
+            f"{msg_count} turns",
+            f"{token_total:,} tok",
             f"{mins}:{secs:02d}",
         ]
 
+        # Mode indicator
+        if permission_mode == "auto":
+            parts.append("<style bg='#1a3a1a' fg='#44cc44'>auto</style>")
+        else:
+            parts.append("ask")
+
         if active_files_count > 0:
-            parts.append(f"files: {active_files_count}")
+            parts.append(f"{active_files_count} files")
 
         if memory_count > 0:
-            parts.append(f"mem: {memory_count}")
+            parts.append(f"{memory_count} mem")
 
         if rr_active:
-            parts.append("⟳ round-robin")
+            parts.append("⟳ rr")
 
         parts.append("<i>/help</i>")
         return HTML("  │  ".join(parts))

@@ -143,6 +143,7 @@ def main():
                 rr_active=bool(key_manager and key_manager.is_active),
                 active_files_count=len(engine.repo.active_files),
                 memory_count=len(list_memories()),
+                permission_mode=engine.permission_mode,
             )
 
             user_input = session.prompt(

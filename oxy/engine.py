@@ -244,6 +244,9 @@ class ChatEngine:
         self._auto_compact()
         self._rotate_client()
 
+        # Track turn timing (Grok Build style)
+        turn_start = time.perf_counter()
+
         # The Agentic Tool Loop
         for iteration in range(MAX_TOOL_ITERATIONS):
             if self._cancelled:
@@ -272,7 +275,8 @@ class ChatEngine:
             # Display thinking / reasoning if present (e.g. DeepSeek R1, OpenAI o1/o3)
             thought = getattr(message, "reasoning_content", None)
             if thought:
-                render_thought(thought, self._theme)
+                thought_elapsed = time.perf_counter() - turn_start
+                render_thought(thought, self._theme, elapsed_secs=thought_elapsed)
 
             # Track tokens if provided by provider
             if response.usage:
@@ -439,7 +443,8 @@ class ChatEngine:
             if content:
                 self.session.commit_assistant_pre_execution(content=content)
                 self.history.append({"role": "assistant", "content": content})
-                render_ai_response(content, self._theme)
+                turn_elapsed = time.perf_counter() - turn_start
+                render_ai_response(content, self._theme, turn_time=turn_elapsed)
                 if response.usage:
                     pt = response.usage.prompt_tokens or 0
                     ct = response.usage.completion_tokens or 0

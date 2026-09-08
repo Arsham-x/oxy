@@ -261,8 +261,86 @@ class TestOXYArchitecture(unittest.TestCase):
             render_cockpit_header({"name": "Cyber"}, animated=False)
         output = buf.getvalue()
         self.assertIn("██████╗", output)
-        self.assertIn("A  G  E  N  T", output)
+        self.assertIn("A G E N T", output)
         self.assertIn("━", output)
+
+    # ── 11. Status Line (Grok Build-style toolbar) ──────────────────
+    def test_status_line_toolbar(self):
+        from oxy.input import make_toolbar
+        from datetime import datetime
+
+        toolbar_fn = make_toolbar(
+            model="deepseek-chat",
+            msg_count=5,
+            max_history=20,
+            token_total=1234,
+            start_time=datetime.now(),
+            theme_name="cyber",
+            rr_active=False,
+            active_files_count=3,
+            memory_count=2,
+            permission_mode="ask",
+        )
+        result = toolbar_fn()
+        # Result is an HTML formatted text object
+        text = result.value  # HTML objects have .value
+        self.assertIn("deepseek-chat", text)
+        self.assertIn("5 turns", text)
+        self.assertIn("1,234 tok", text)
+        self.assertIn("ask", text)
+        self.assertIn("3 files", text)
+        self.assertIn("2 mem", text)
+
+    # ── 12. Turn Metadata in AI Response ────────────────────────────
+    def test_ai_response_with_turn_time(self):
+        from oxy.render import render_ai_response, get_theme
+        import io
+        from unittest.mock import patch
+
+        theme = get_theme("cyber")
+        buf = io.StringIO()
+        with patch("oxy.render.console") as mock_console:
+            captured = []
+            mock_console.print = lambda *a, **kw: captured.append(str(a[0]) if a else "")
+            render_ai_response("Hello world", theme, turn_time=2.5)
+
+        # Should have rendered something (the panel + turn time badge)
+        self.assertTrue(len(captured) >= 1)
+
+    # ── 13. Thinking Block with Elapsed Time ────────────────────────
+    def test_thinking_block_with_elapsed(self):
+        from oxy.render import render_thought, get_theme
+        from unittest.mock import patch
+
+        theme = get_theme("cyber")
+        captured = []
+        with patch("oxy.render.console") as mock_console:
+            mock_console.print = lambda *a, **kw: captured.append(str(a[0]) if a else "")
+            render_thought("Deep reasoning about architecture...", theme, elapsed_secs=3.8)
+
+        output = " ".join(captured)
+        self.assertIn("◆", output)
+        self.assertIn("3.8s", output)
+
+    # ── 14. Permission Mode in Toolbar ──────────────────────────────
+    def test_toolbar_auto_mode(self):
+        from oxy.input import make_toolbar
+        from datetime import datetime
+
+        toolbar_fn = make_toolbar(
+            model="gpt-4o",
+            msg_count=0,
+            max_history=20,
+            token_total=0,
+            start_time=datetime.now(),
+            theme_name="minimal",
+            rr_active=True,
+            permission_mode="auto",
+        )
+        result = toolbar_fn()
+        text = result.value
+        self.assertIn("auto", text)
+        self.assertIn("rr", text)
 
 
 if __name__ == "__main__":
