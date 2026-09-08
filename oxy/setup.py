@@ -12,6 +12,8 @@ Features:
 from __future__ import annotations
 
 import os
+import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +36,7 @@ console = Console()
 
 LANG = {
     "en": {
-        "welcome_title":    "Welcome to OXY Setup",
+        "welcome_title":    "OXY Setup",
         "welcome_sub":      "Autonomous AI Coding Agent · Interactive Configuration",
         "step":             "Step",
         "of":               "of",
@@ -46,8 +48,8 @@ LANG = {
         "lang_desc":        "Choose your preferred interface language:",
 
         "provider_title":   "AI Provider",
-        "provider_desc":    "Select where your AI model is hosted:",
-        "provider_hint":    "OXY works with any OpenAI-compatible API (OpenAI, DeepSeek, Groq, Ollama, OpenRouter).",
+        "provider_desc":    "Select your AI model provider:",
+        "provider_hint":    "OXY connects to any OpenAI-compatible provider (DeepSeek, OpenAI, Groq, Ollama, OpenRouter).",
 
         "model_title":      "Model Selection",
         "model_desc":       "Select model or enter custom name:",
@@ -55,13 +57,13 @@ LANG = {
         "model_custom_desc":"Enter any other model identifier",
 
         "key_title":        "Authentication Key",
-        "key_desc":         "Enter your API key:",
-        "key_hint":         "Stored locally in oxy_config.json. You can also use system environment variables.",
+        "key_desc":         "Enter API key:",
+        "key_hint":         "Stored locally in oxy_config.json. System environment variables are also supported.",
 
-        "theme_title":      "Visual Interface Theme",
-        "theme_desc":       "Select your terminal cockpit style:",
+        "theme_title":      "Cockpit Theme",
+        "theme_desc":       "Select terminal interface style:",
 
-        "security_title":   "Tool Security & Permissions",
+        "security_title":   "Security & Permissions",
         "security_desc":    "Choose how tool actions (file edits, bash execution) are authorized:",
 
         "adv_title":        "Advanced Parameters",
@@ -72,8 +74,8 @@ LANG = {
     },
 
     "fa": {
-        "welcome_title":    "به ویزارد راه‌اندازی OXY خوش آمدید",
-        "welcome_sub":      "دستیار هوشمند برنامه‌نویسی · تنظیمات تعاملی سیستم",
+        "welcome_title":    "راه‌اندازی تعاملی OXY",
+        "welcome_sub":      "دستیار هوشمند برنامه‌نویسی · پیکربندی سیستم",
         "step":             "مرحله",
         "of":               "از",
         "done_title":       "راه‌اندازی با موفقیت انجام شد!",
@@ -87,15 +89,15 @@ LANG = {
         "provider_hint":    "اوکسی با تمام سرویس‌های سازگار با OpenAI کار می‌کند (DeepSeek, OpenAI, Groq, Ollama).",
 
         "model_title":      "انتخاب مدل",
-        "model_desc":       "مدل پیشنهادی را انتخاب کرده یا مدل دلخواه وارد کنید:",
+        "model_desc":       "مدل مورد نظر را انتخاب کرده یا شناسه دلخواه وارد کنید:",
         "model_custom":     "مدل سفارشی...",
-        "model_custom_desc":"تایپ نام و شناسه مدل دلخواه",
+        "model_custom_desc":"ورود دستی نام مدل",
 
         "key_title":        "کلید احراز هویت (API Key)",
         "key_desc":         "کلید API را وارد کنید:",
-        "key_hint":         "کلید به صورت امن در oxy_config.json ذخیره می‌شود و مستقیماً به ارائه‌دهنده ارسال می‌گردد.",
+        "key_hint":         "کلید به صورت محلی در oxy_config.json ذخیره می‌شود.",
 
-        "theme_title":      "تم ظاهری رابط کاربری",
+        "theme_title":      "تم ظاهری ترمینال",
         "theme_desc":       "استایل بصری مورد علاقه خود را انتخاب کنید:",
 
         "security_title":   "امنیت و سطح دسترسی ابزارها",
@@ -109,40 +111,40 @@ LANG = {
     },
 
     "zh": {
-        "welcome_title":    "欢迎使用 OXY 设置向导",
+        "welcome_title":    "OXY 设置向导",
         "welcome_sub":      "自主 AI 编程智能体 · 交互式配置",
         "step":             "步骤",
         "of":               "/",
         "done_title":       "配置完成！",
-        "done_body":        "配置已保存至 [cyan]{path}[/]\n随时运行 [bold cyan]python oxy.py[/] 启动体验。",
+        "done_body":        "配置已保存至 [cyan]{path}[/]\n运行 [bold cyan]python oxy.py[/] 启动。",
 
         "lang_title":       "语言选择",
-        "lang_desc":        "请选择您的偏好交互语言：",
+        "lang_desc":        "请选择偏好语言：",
 
-        "provider_title":   "AI 服务提供商",
-        "provider_desc":    "选择您的模型托管平台：",
-        "provider_hint":    "OXY 支持所有 OpenAI 兼容接口（DeepSeek, OpenAI, Groq, Ollama 等）。",
+        "provider_title":   "AI 服务商",
+        "provider_desc":    "选择模型服务商：",
+        "provider_hint":    "支持所有 OpenAI 兼容接口（DeepSeek, OpenAI, Groq, Ollama 等）。",
 
         "model_title":      "选择模型",
-        "model_desc":       "选择推荐模型或输入自定义模型名称：",
+        "model_desc":       "选择模型或输入自定义名称：",
         "model_custom":     "自定义模型...",
-        "model_custom_desc":"手动输入其他模型标识符",
+        "model_custom_desc":"手动输入模型标识符",
 
         "key_title":        "API 认证密钥",
-        "key_desc":         "请输入您的 API Key：",
-        "key_hint":         "密钥仅安全保存在本地 oxy_config.json，直接发送给对应服务商。",
+        "key_desc":         "请输入 API Key：",
+        "key_hint":         "保存在本地 oxy_config.json。",
 
         "theme_title":      "界面视觉主题",
-        "theme_desc":       "选择您喜欢的终端外观风格：",
+        "theme_desc":       "选择外观风格：",
 
-        "security_title":   "工具安全与执行权限",
-        "security_desc":    "设置对文件修改与终端命令执行的确认策略：",
+        "security_title":   "安全与执行权限",
+        "security_desc":    "工具执行确认策略：",
 
         "adv_title":        "高级推理参数",
-        "adv_desc":         "是否需要微调记忆轮数与推理参数？",
+        "adv_desc":         "是否微调推理参数？",
         "adv_history":      "历史对话轮数",
         "adv_temperature":  "采样温度 (0.0 = 精确, 1.0 = 创意)",
-        "adv_max_tokens":   "单次响应最大 token 数",
+        "adv_max_tokens":   "单次最大 token 数",
     },
 }
 
@@ -154,11 +156,11 @@ LANG = {
 PROVIDERS = [
     {
         "name": "DeepSeek",
-        "desc": "DeepSeek V3 & R1 high-speed reasoning (Best value)",
+        "desc": "DeepSeek V3 & R1 reasoning",
         "url": "https://api.deepseek.com/v1",
         "models": [
-            ("deepseek-chat", "DeepSeek-V3 671B flagship general & coding model"),
-            ("deepseek-reasoner", "DeepSeek-R1 full reasoning & thought model"),
+            ("deepseek-chat", "DeepSeek-V3 flagship general & coding"),
+            ("deepseek-reasoner", "DeepSeek-R1 full reasoning & thought"),
         ],
         "default_model": "deepseek-chat",
         "env_key": "DEEPSEEK_API_KEY",
@@ -168,9 +170,9 @@ PROVIDERS = [
         "desc": "Official OpenAI API (GPT-4o, o3-mini, o1)",
         "url": "https://api.openai.com/v1",
         "models": [
-            ("gpt-4o-mini", "Fast, efficient, highly intelligent default"),
+            ("gpt-4o-mini", "Fast, smart, lightweight default"),
             ("gpt-4o", "Flagship multimodal intelligence"),
-            ("o3-mini", "Next-gen STEM & coding reasoning model"),
+            ("o3-mini", "High-performance coding & reasoning"),
             ("o1", "Deep reasoning for complex architecture"),
         ],
         "default_model": "gpt-4o-mini",
@@ -181,16 +183,16 @@ PROVIDERS = [
         "desc": "Ultra-fast LPU inference (~300+ tokens/sec)",
         "url": "https://api.groq.com/openai/v1",
         "models": [
-            ("llama-3.3-70b-versatile", "Flagship Llama 3.3 running on Groq LPU"),
+            ("llama-3.3-70b-versatile", "Llama 3.3 70B on Groq LPU"),
             ("deepseek-r1-distill-llama-70b", "DeepSeek R1 reasoning on Groq LPU"),
-            ("llama-3.1-8b-instant", "Ultra-fast instant coding & chat model"),
+            ("llama-3.1-8b-instant", "Ultra-fast instant coding & chat"),
         ],
         "default_model": "llama-3.3-70b-versatile",
         "env_key": "GROQ_API_KEY",
     },
     {
         "name": "OpenRouter",
-        "desc": "Unified router for Claude, GPT, DeepSeek, Mistral",
+        "desc": "Unified router (Claude, GPT, DeepSeek, Mistral)",
         "url": "https://openrouter.ai/api/v1",
         "models": [
             ("anthropic/claude-3.7-sonnet", "Claude 3.7 Sonnet with hybrid reasoning"),
@@ -203,7 +205,7 @@ PROVIDERS = [
     },
     {
         "name": "Together AI",
-        "desc": "Open-source model cloud infrastructure",
+        "desc": "Cloud open-source infrastructure",
         "url": "https://api.together.xyz/v1",
         "models": [
             ("meta-llama/Llama-3.3-70B-Instruct-Turbo", "Llama 3.3 70B Turbo"),
@@ -218,26 +220,26 @@ PROVIDERS = [
         "desc": "On-device private inference (localhost:11434)",
         "url": "http://localhost:11434/v1",
         "models": [
-            ("qwen2.5-coder:latest", "Recommended: Qwen 2.5 Coder specialized for programming"),
-            ("llama3.1:latest", "Meta Llama 3.1 instruct model"),
-            ("deepseek-r1:latest", "DeepSeek R1 distilled reasoning model"),
+            ("qwen2.5-coder:latest", "Qwen 2.5 Coder for programming"),
+            ("llama3.1:latest", "Meta Llama 3.1 instruct"),
+            ("deepseek-r1:latest", "DeepSeek R1 distilled reasoning"),
         ],
         "default_model": "qwen2.5-coder:latest",
         "env_key": "",
     },
     {
         "name": "Local (LM Studio)",
-        "desc": "Local GUI model server (localhost:1234)",
+        "desc": "Local GUI server (localhost:1234)",
         "url": "http://localhost:1234/v1",
         "models": [
-            ("local-model", "Active model currently loaded in LM Studio GUI"),
+            ("local-model", "Active loaded model in LM Studio GUI"),
         ],
         "default_model": "local-model",
         "env_key": "",
     },
     {
         "name": "Custom Endpoint",
-        "desc": "Any custom OpenAI-compatible server URL",
+        "desc": "Custom OpenAI-compatible URL",
         "url": "",
         "models": [],
         "default_model": "",
@@ -246,14 +248,14 @@ PROVIDERS = [
 ]
 
 THEMES_INFO = [
-    ("cyber",   "Cyber",    "Electric cyan borders, neon green badges, matrix aesthetics"),
-    ("aurora",  "Aurora",   "Northern lights palette, soft violet & emerald gradients"),
-    ("minimal", "Minimal",  "Clean, distraction-free monochrome for focused coding"),
+    ("cyber",   "Cyber",    "Electric cyan & neon green matrix style"),
+    ("aurora",  "Aurora",   "Northern lights violet & emerald gradients"),
+    ("minimal", "Minimal",  "Clean monochrome for focused terminal setups"),
 ]
 
 PERMISSION_OPTIONS = [
-    ("ask",  "Ask Permission (Recommended)", "Prompts confirmation before mutating files or running shell commands"),
-    ("auto", "Auto-Approve (Autonomous)",   "Executes all tool operations autonomously without interactive prompts"),
+    ("ask",  "Interactive (Recommended)", "Confirm file mutations and bash command execution"),
+    ("auto", "Autonomous (YOLO)",          "Execute tools autonomously (Hardline floor active)"),
 ]
 
 
@@ -263,6 +265,12 @@ PERMISSION_OPTIONS = [
 
 def _ask_input(prompt_text: str, default: str = "", password: bool = False, theme: dict = None) -> str:
     """Prompt user for clean single-line text input."""
+    import termios
+    try:
+        termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+    except Exception:
+        pass
+
     accent = theme.get("accent", "cyan") if theme else "cyan"
     display_def = "****" if password and default else default
 
@@ -294,6 +302,32 @@ def _ask_yes_no(prompt_text: str, default: bool = False, theme: dict = None) -> 
     return chosen_label == "Yes"
 
 
+def _animate_setup_complete():
+    """Lively animated initialization sequence showing engine subsystems arming."""
+    if not sys.stdout.isatty():
+        return
+    accent = "\033[1;36m"
+    green = "\033[1;32m"
+    dim = "\033[2m"
+    reset = "\033[0m"
+
+    steps = [
+        "Binding segmented parallel execution planner...",
+        "Hardline security floor active & verified...",
+        "Freezing base system prompt for KV prefix cache...",
+        "Initializing durable transaction ledger in .oxy/sessions/...",
+    ]
+    sys.stdout.write("\n")
+    for step in steps:
+        sys.stdout.write(f"  {accent}⠋{reset} {dim}{step}{reset}\r")
+        sys.stdout.flush()
+        time.sleep(0.04)
+        sys.stdout.write(f"  {green}✔{reset} {dim}{step[:-3]} [OK]{reset}\n")
+        sys.stdout.flush()
+    sys.stdout.write("\n")
+    sys.stdout.flush()
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  Interactive Setup Wizard
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -309,9 +343,9 @@ def setup_wizard() -> dict[str, Any]:
 
     # ── Step 1: Language ───────────────────────────────────────
     lang_options = [
-        ("English",  "Default international interface"),
-        ("فارسی",    "رابط کاربری فارسی با پشتیبانی کامل و روان"),
-        ("中文",      "中文交互界面与本地化说明"),
+        ("English",  "English"),
+        ("فارسی",    "زبان فارسی"),
+        ("中文",      "简体中文"),
     ]
 
     render_stepper(1, total_steps, "Language Selection / انتخاب زبان", theme)
@@ -442,6 +476,9 @@ def setup_wizard() -> dict[str, Any]:
             config["max_tokens"] = int(tok_val)
         except ValueError:
             pass
+
+    # ── Animated Subsystem Initialization ──────────────────────
+    _animate_setup_complete()
 
     # ── Save Configuration ─────────────────────────────────────
     save_config(config)

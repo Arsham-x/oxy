@@ -131,25 +131,9 @@ def print_welcome(config: dict[str, Any], theme: dict[str, Any], engine: Any = N
     accent = theme.get("accent", "cyan")
     dim = theme.get("dim", "dim")
 
-    # Header ASCII art
-    if theme_name == "cyber":
-        console.print(
-            "  [bold cyan]██████╗ ██╗  ██╗██╗   ██╗[/]   [bold green]⟫ C O C K P I T ⟪[/]\n"
-            " [bold cyan]██╔═══██╗╚██╗██╔╝╚██╗ ██╔╝[/]   [dim bright_black]Autonomous Agent Interface[/]\n"
-            " [bold cyan]██║   ██║ ╚███╔╝  ╚████╔╝ [/]   [dim cyan]v1.0.0 · Production Grade[/]\n"
-            " [bold cyan]╚██████╔╝██╔╝ ██╗   ██║   [/]\n"
-            "  [bold cyan]╚═════╝ ╚═╝  ╚═╝   ╚═╝   [/]"
-        )
-    elif theme_name == "aurora":
-        console.print(
-            "  [bold #c792ea]✦  O  X  Y  ✦[/]   [italic #7fdbca]Northern Lights AI Engine[/]\n"
-            "  [dim #666680]Modular CLI Agent · v1.0.0[/]"
-        )
-    else:
-        console.print(
-            "  [bold white on blue]  OXY  [/]  [bold]AI Agent[/]  [dim]v1.0.0[/]"
-        )
-    console.print()
+    # Header ASCII art — Centered Big OXY + Lower-Right AGENT
+    from .ui import render_cockpit_header
+    render_cockpit_header(theme, animated=False)
 
     # Resolve provider display
     base = config.get("base_url", "")

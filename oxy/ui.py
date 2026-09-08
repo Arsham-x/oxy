@@ -14,11 +14,13 @@ import os
 import re
 import sys
 import shutil
+import time
 from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
+from rich.cells import cell_len
 from rich import box
 
 try:
@@ -112,44 +114,53 @@ def reshape_markdown(md_text: str) -> str:
 #  Interactive Arrow-Key Selector (In-Place ANSI Engine)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def _read_key() -> str:
-    """Read a single keypress in raw mode on POSIX systems."""
-    import tty
-    import termios
-
-    fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)
+def _read_raw_key(fd: int) -> str:
+    """Read a single keypress directly from raw OS file descriptor without buffering."""
     try:
-        tty.setraw(fd)
-        ch = sys.stdin.read(1)
-        if ch == '\x1b':
-            # Handle escape sequences with short non-blocking lookahead
-            import select
-            r, _, _ = select.select([sys.stdin], [], [], 0.05)
-            if r:
-                ch2 = sys.stdin.read(1)
-                if ch2 == '[':
-                    ch3 = sys.stdin.read(1)
-                    if ch3 == 'A': return 'up'
-                    if ch3 == 'B': return 'down'
-                    if ch3 == 'C': return 'right'
-                    if ch3 == 'D': return 'left'
-            return 'esc'
-        elif ch in ('\r', '\n'):
-            return 'enter'
-        elif ch == ' ':
-            return 'enter'
-        elif ch in ('k', 'K'):
-            return 'up'
-        elif ch in ('j', 'J'):
-            return 'down'
-        elif ch == '\x03':  # Ctrl+C
-            raise KeyboardInterrupt()
-        elif ch in ('q', 'Q'):
-            return 'q'
-        return ch
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        b = os.read(fd, 32)
+    except Exception:
+        return ""
+
+    if not b:
+        return ""
+
+    # Ctrl+C
+    if b == b"\x03":
+        raise KeyboardInterrupt()
+
+    # Up arrow (ANSI, SS3, or vim navigation)
+    if b in (b"\x1b[A", b"\x1bOA", b"k", b"K") or (b.startswith(b"\x1b[") and b.endswith(b"A")):
+        return "up"
+
+    # Down arrow (ANSI, SS3, or vim navigation)
+    if b in (b"\x1b[B", b"\x1bOB", b"j", b"J") or (b.startswith(b"\x1b[") and b.endswith(b"B")):
+        return "down"
+
+    # Enter
+    if b in (b"\r", b"\n"):
+        return "enter"
+
+    # Direct 1-9 selection
+    if len(b) == 1 and b in b"123456789":
+        return b.decode("ascii")
+
+    # If it starts with an escape sequence that arrived in chunks
+    if b.startswith(b"\x1b"):
+        import select
+        r, _, _ = select.select([fd], [], [], 0.04)
+        if r:
+            try:
+                extra = os.read(fd, 32)
+                full = b + extra
+                if full.endswith(b"A"):
+                    return "up"
+                if full.endswith(b"B"):
+                    return "down"
+            except Exception:
+                pass
+        return "esc"
+
+    return ""
 
 
 def select_menu(
@@ -160,7 +171,7 @@ def select_menu(
     help_hint: str | None = None,
     step_info: str | None = None,
 ) -> int:
-    """Rock-solid, flicker-free arrow-key selector with in-place ANSI rewriting.
+    """Rock-solid, flicker-free arrow-key selector with full-width in-place ANSI rewriting.
 
     Zero screen duplication, zero background thread races.
     Operates identically to Claude Code and Hermes Agent selection prompts.
@@ -185,49 +196,65 @@ def select_menu(
 
     # ANSI Color Codes
     if theme_name == "cyber":
-        accent = "\033[1;36m"    # Bold Cyan
-        cursor_color = "\033[1;32m" # Bold Green
+        accent = "\033[1;36m"          # Bold Cyan
+        cursor_color = "\033[1;32m"    # Bold Green
         dim = "\033[2m"
         white = "\033[1;37m"
         ok_color = "\033[1;32m"
+        border_color = "\033[2;36m"
     elif theme_name == "aurora":
-        accent = "\033[1;35m"    # Bold Magenta/Purple
-        cursor_color = "\033[1;36m" # Bold Teal
+        accent = "\033[1;35m"          # Bold Magenta/Purple
+        cursor_color = "\033[1;36m"    # Bold Teal
         dim = "\033[2m"
         white = "\033[1;37m"
         ok_color = "\033[1;35m"
+        border_color = "\033[2;35m"
     else:  # Minimal
-        accent = "\033[1;34m"    # Bold Blue
+        accent = "\033[1;34m"          # Bold Blue
         cursor_color = "\033[1m"
         dim = "\033[2m"
         white = "\033[1;37m"
         ok_color = "\033[1;32m"
+        border_color = "\033[2m"
 
     reset = "\033[0m"
 
     current = max(0, min(default, len(options) - 1))
     cols = shutil.get_terminal_size((80, 24)).columns
+    rule_w = max(30, min(cols - 4, 120))
 
     def build_lines(idx: int) -> list[str]:
         lines = []
-        # Header line
         step_prefix = f"{dim}[{step_info}]{reset} " if step_info else ""
-        header = f"  {accent}?{reset} {step_prefix}{white}{title}{reset} {dim}(↑/↓ navigate, Enter confirm){reset}"
+        header = f"  {accent}?{reset} {step_prefix}{white}{title}{reset} {dim}(↑/↓ navigate · Enter confirm){reset}"
+
+        lines.append(f"  {border_color}{'━' * rule_w}{reset}")
         lines.append(header)
+        lines.append(f"  {border_color}{'─' * rule_w}{reset}")
 
-        # Options
+        max_label_cell = max(cell_len(l) for l, _ in options)
+        col_w = max(18, min(32, max_label_cell + 3))
+        desc_w = max(10, rule_w - col_w - 12)
+
         for i, (label, desc) in enumerate(options):
-            pad = max(2, 22 - len(label))
+            pad = " " * max(1, col_w - cell_len(label))
+            d = desc[:desc_w]
             if i == idx:
-                line = f"  {cursor_color}❯{reset} {white}{label}{reset}{' ' * pad} {accent}{desc}{reset}"
+                lines.append(f"  {cursor_color}❯{reset}  {white}{label}{pad}{reset}{accent}───  {d}{reset}")
             else:
-                line = f"    {dim}{label}{' ' * pad} {desc}{reset}"
-            lines.append(line)
+                lines.append(f"     {dim}{label}{pad}───  {d}{reset}")
 
-        # Footer hint
+        lines.append(f"  {border_color}{'─' * rule_w}{reset}")
         hint = help_hint or "↑/↓ navigate · Enter select · 1-9 direct jump"
         lines.append(f"  {dim}↳ {hint}{reset}")
+        lines.append(f"  {border_color}{'━' * rule_w}{reset}")
         return lines
+
+    import tty
+    import termios
+
+    fd = sys.stdin.fileno()
+    old_term = termios.tcgetattr(fd)
 
     # Hide cursor
     sys.stdout.write("\033[?25l")
@@ -242,14 +269,13 @@ def select_menu(
     sys.stdout.flush()
 
     try:
+        tty.setraw(fd)
+        termios.tcflush(fd, termios.TCIFLUSH)
         while True:
             try:
-                key = _read_key()
+                key = _read_raw_key(fd)
             except KeyboardInterrupt:
-                sys.stdout.write(f"\033[{line_count}A\r\033[0J")
-                sys.stdout.write("\033[?25h\r\n")
-                sys.stdout.flush()
-                raise SystemExit(0)
+                break
 
             if key == "up":
                 current = (current - 1) % len(options)
@@ -260,8 +286,9 @@ def select_menu(
             elif key.isdigit() and 1 <= int(key) <= len(options):
                 current = int(key) - 1
                 break
-            elif key in ("esc", "q"):
-                break
+            else:
+                # Do NOT break on escape or other unhandled keys! Ignore safely.
+                continue
 
             # In-place redraw: move cursor up line_count lines and rewrite each line
             new_lines = build_lines(current)
@@ -271,6 +298,13 @@ def select_menu(
             sys.stdout.flush()
 
     finally:
+        # Restore terminal attributes before printing anything
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_term)
+        try:
+            termios.tcflush(fd, termios.TCIFLUSH)
+        except Exception:
+            pass
+
         # Clear menu lines completely and print clean confirmation badge
         sys.stdout.write(f"\033[{line_count}A\r\033[0J")
         chosen_label, _ = options[current]
@@ -287,16 +321,18 @@ def select_menu(
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def render_stepper(current_step: int, total_steps: int, title: str, theme: dict[str, Any] | None = None):
-    """Render a clean breadcrumb progress indicator across setup steps."""
+    """Render a clean breadcrumb progress indicator spanning terminal width."""
     theme = theme or {}
     accent = theme.get("accent", "cyan")
     dim = theme.get("dim", "dim")
+    cols = shutil.get_terminal_size((80, 24)).columns
 
     bar_parts = []
     for step in range(1, total_steps + 1):
         if step < current_step:
             bar_parts.append(f"[{accent}]●[/]")
-            bar_parts.append(f"[{accent}]━━━[/]")
+            if step < total_steps:
+                bar_parts.append(f"[{accent}]━━━[/]")
         elif step == current_step:
             bar_parts.append(f"[bold white on {accent}] {step} [/]")
             if step < total_steps:
@@ -312,37 +348,81 @@ def render_stepper(current_step: int, total_steps: int, title: str, theme: dict[
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  Cockpit Header
+#  Cockpit Header — Centered Big OXY + Lower-Right AGENT
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-BANNER_CYBER = """
-[bold cyan]  ██████╗ ██╗  ██╗██╗   ██╗[/]   [bold #00ff88]✦ O X Y  A G E N T ✦[/]
- [bold cyan]██╔═══██╗╚██╗██╔╝╚██╗ ██╔╝[/]   [dim bright_white]Autonomous Coding Assistant[/]
- [bold cyan]██║   ██║ ╚███╔╝  ╚████╔╝ [/]   [dim cyan]v1.0.0 · Production Grade[/]
- [bold cyan]██║   ██║ ██╔██╗   ╚██╔╝  [/]   [dim bright_black]OpenAI Compatible · Multi-Provider Engine[/]
- [bold cyan]╚██████╔╝██╔╝ ██╗   ██║   [/]
-  [bold cyan]╚═════╝ ╚═╝  ╚═╝   ╚═╝   [/]
-"""
-
-BANNER_AURORA = """
-[bold #c792ea]   ✦  O  X  Y   A  G  E  N  T  ✦   [/]
-[italic #7fdbca]  Northern Lights Autonomous Workspace · v1.0.0  [/]
-"""
-
-BANNER_MINIMAL = """
-[bold white on blue]  OXY  [/]  [bold]AI Agent[/]  [dim]v1.0.0 · Setup[/]
-"""
+OXY_BLOCK_ART = [
+    ("  ██████╗   ██╗   ██╗ ██╗   ██╗", "\033[1;36m"),
+    (" ██╔═══██╗  ╚██╗ ██╔╝ ╚██╗ ██╔╝", "\033[1;36m"),
+    (" ██║   ██║   ╚████╔╝   ╚████╔╝ ", "\033[1;96m"),
+    (" ██║   ██║    ╚██╔╝     ╚██╔╝  ", "\033[1;32m"),
+    (" ██║   ██║     ██║       ██║   ", "\033[1;32m"),
+    (" ╚██████╔╝     ██║       ██║   ", "\033[1;92m"),
+    ("  ╚═════╝      ╚═╝       ╚═╝   ", "\033[1;92m"),
+]
 
 
-def render_cockpit_header(theme: dict[str, Any] | None = None):
-    """Render top cockpit banner based on theme."""
+def render_cockpit_header(theme: dict[str, Any] | None = None, animated: bool = True):
+    """Render full-width, centered OXY banner with lower-right AGENT badge and animated reveal."""
     theme = theme or {}
-    theme_name = theme.get("name", "Minimal").lower()
+    cols = shutil.get_terminal_size((80, 24)).columns
+    rule_w = max(40, min(cols, 120))
+    reset = "\033[0m"
 
-    if theme_name == "cyber":
-        console.print(BANNER_CYBER.strip())
-    elif theme_name == "aurora":
-        console.print(BANNER_AURORA.strip())
+    # Color palette based on theme
+    theme_name = theme.get("name", "Cyber").lower()
+    if theme_name == "aurora":
+        rule_color = "\033[2;35m"
+        art_colors = [
+            "\033[1;35m", "\033[1;35m", "\033[1;95m",
+            "\033[1;36m", "\033[1;36m", "\033[1;96m", "\033[1;96m"
+        ]
+        agent_color = "\033[1;96m"
+    elif theme_name == "minimal":
+        rule_color = "\033[2m"
+        art_colors = ["\033[1;37m"] * 7
+        agent_color = "\033[1;37m"
+    else:  # Cyber
+        rule_color = "\033[2;36m"
+        art_colors = [
+            "\033[1;36m", "\033[1;36m", "\033[1;96m",
+            "\033[1;32m", "\033[1;32m", "\033[1;92m", "\033[1;92m"
+        ]
+        agent_color = "\033[1;92m"
+
+    is_tty = sys.stdout.isatty()
+    art_w = max(len(line) for line, _ in OXY_BLOCK_ART)
+
+    # If terminal is wide enough, display centered block font
+    if cols >= 45:
+        margin = max(0, (cols - art_w) // 2)
+        rule_margin = max(0, (cols - rule_w) // 2)
+
+        # Top horizon line
+        sys.stdout.write(" " * rule_margin + rule_color + ("━" * rule_w) + reset + "\n")
+        sys.stdout.flush()
+
+        # OXY Art Lines (with smooth animated reveal if interactive)
+        for idx, (line_text, _) in enumerate(OXY_BLOCK_ART):
+            color = art_colors[idx]
+            sys.stdout.write(" " * margin + color + line_text + reset + "\n")
+            sys.stdout.flush()
+            if animated and is_tty:
+                time.sleep(0.015)
+
+        # Lower-right AGENT badge positioned under OXY
+        agent_badge = "✦  A  G  E  N  T  ✦  \033[2mv1.0.0\033[0m"
+        # Visible length without escape codes is 27 chars
+        agent_pad = margin + art_w - 27
+        sys.stdout.write(" " * max(0, agent_pad) + agent_color + agent_badge + reset + "\n")
+
+        # Bottom horizon line
+        sys.stdout.write(" " * rule_margin + rule_color + ("━" * rule_w) + reset + "\n\n")
+        sys.stdout.flush()
     else:
-        console.print(BANNER_MINIMAL.strip())
+        # Compact mode for narrow terminals
+        sys.stdout.write(rule_color + ("━" * cols) + reset + "\n")
+        sys.stdout.write(f"  {agent_color}✦ OXY AGENT ✦{reset}  \033[2mv1.0.0 · Production Grade\033[0m\n")
+        sys.stdout.write(rule_color + ("━" * cols) + reset + "\n\n")
+        sys.stdout.flush()
     console.print()

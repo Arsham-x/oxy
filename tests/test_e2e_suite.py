@@ -199,6 +199,71 @@ class TestOXYArchitecture(unittest.TestCase):
         cont, _ = handle_command(engine, "/sessions", cfg, theme)
         self.assertTrue(cont)
 
+    # ── 9. Raw Terminal Key Parser & Zero-Skip Navigation ───────────
+    def test_raw_key_parser(self):
+        import os
+        from oxy.ui import _read_raw_key
+
+        # Test simulated pipes for byte sequences
+        r_fd, w_fd = os.pipe()
+        try:
+            # Test ANSI Up Arrow (\x1b[A)
+            os.write(w_fd, b"\x1b[A")
+            self.assertEqual(_read_raw_key(r_fd), "up")
+
+            # Test ANSI Down Arrow (\x1b[B)
+            os.write(w_fd, b"\x1b[B")
+            self.assertEqual(_read_raw_key(r_fd), "down")
+
+            # Test Application Cursor / SS3 Up (\x1bOA)
+            os.write(w_fd, b"\x1bOA")
+            self.assertEqual(_read_raw_key(r_fd), "up")
+
+            # Test Application Cursor / SS3 Down (\x1bOB)
+            os.write(w_fd, b"\x1bOB")
+            self.assertEqual(_read_raw_key(r_fd), "down")
+
+            # Test Vim navigation keys
+            os.write(w_fd, b"k")
+            self.assertEqual(_read_raw_key(r_fd), "up")
+            os.write(w_fd, b"j")
+            self.assertEqual(_read_raw_key(r_fd), "down")
+
+            # Test Enter
+            os.write(w_fd, b"\r")
+            self.assertEqual(_read_raw_key(r_fd), "enter")
+            os.write(w_fd, b"\n")
+            self.assertEqual(_read_raw_key(r_fd), "enter")
+
+            # Test Direct numeric quick jump (1-9)
+            os.write(w_fd, b"3")
+            self.assertEqual(_read_raw_key(r_fd), "3")
+
+            # Standalone escape or unhandled key must NOT advance
+            os.write(w_fd, b"\x1b")
+            self.assertIn(_read_raw_key(r_fd), ("esc", ""))
+
+            os.write(w_fd, b"x")
+            self.assertEqual(_read_raw_key(r_fd), "")
+        finally:
+            os.close(r_fd)
+            os.close(w_fd)
+
+    # ── 10. Centered OXY Header & AGENT Lower-Right Layout ──────────
+    def test_cockpit_header_layout(self):
+        from oxy.ui import render_cockpit_header, OXY_BLOCK_ART
+        import io
+        from unittest.mock import patch
+
+        self.assertEqual(len(OXY_BLOCK_ART), 7)
+        buf = io.StringIO()
+        with patch("sys.stdout", buf):
+            render_cockpit_header({"name": "Cyber"}, animated=False)
+        output = buf.getvalue()
+        self.assertIn("██████╗", output)
+        self.assertIn("A  G  E  N  T", output)
+        self.assertIn("━", output)
+
 
 if __name__ == "__main__":
     unittest.main()
